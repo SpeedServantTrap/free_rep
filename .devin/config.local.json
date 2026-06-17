@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Exec(ip addr)",
-      "Exec(ip route)"
-    ]
-  }
-}
