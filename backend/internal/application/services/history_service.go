@@ -2,8 +2,10 @@ package services
 
 import (
 	"backend/domain/models"
+	"fmt"
 	"log"
 	"sync"
+	"time"
 )
 
 type SearchRepository interface {
@@ -46,6 +48,19 @@ type RepositoryInterface interface {
 	SaveTCPHistory(record *models.TCPHistoryRecord) error
 	GetTCPHistory(limit int) ([]models.TCPHistoryRecord, error)
 	DeleteTCPHistory() error
+
+	// New L2/L3 device methods
+	SaveOrUpdateL2Device(device *models.L2DeviceNew) error
+	GetL2Device(mac string) (*models.L2DeviceNew, error)
+	GetAllL2Devices() ([]models.L2DeviceNew, error)
+	DeleteAllL2Devices() error
+	DropL2Collection() error
+
+	SaveOrUpdateL3Device(device *models.L3DeviceNew) error
+	GetL3Device(ip string) (*models.L3DeviceNew, error)
+	GetAllL3Devices() ([]models.L3DeviceNew, error)
+	DeleteAllL3Devices() error
+	DropL3Collection() error
 }
 
 // DeviceRepository — removed: L2/L3 inventory is now handled by the
@@ -299,5 +314,213 @@ func (hs *HistoryService) SaveTCPResponse(result models.TCPResponse) {
 	} else {
 		log.Printf("Successfully saved TCP history for task %s", result.TaskID)
 		hs.RemoveCachedRequest(result.TaskID)
+	}
+
+	// Also save to L3 device in new format
+	if result.Status == "success" && host != "" {
+		scanTime := time.Now().Format(time.RFC3339)
+		l3Device := &models.L3DeviceNew{
+			ID:            host,
+			TCPBanner:     result.DecodedText,
+			ScanTimes:     []string{scanTime},
+			ScannerTypes:  []string{"tcp"},
+		}
+		if err := hs.repo.SaveOrUpdateL3Device(l3Device); err != nil {
+			log.Printf("Failed to save L3 device from TCP response: %v", err)
+		}
+	}
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// New L2/L3 Device Processing Methods
+// ──────────────────────────────────────────────────────────────────────────────
+
+// ProcessARPToL2Devices processes ARP response and saves to L2 devices in new format
+func (hs *HistoryService) ProcessARPToL2Devices(result models.ARPResponse) {
+	if hs.repo == nil {
+		return
+	}
+
+	scanTime := time.Now().Format(time.RFC3339)
+
+	// Only process online devices (filter out offline as per requirements)
+	for _, device := range result.Devices {
+		if device.Status != "online" {
+			continue
+		}
+
+		// Skip if MAC is empty (not found)
+		if device.MAC == "" {
+			continue
+		}
+
+		l2Device := &models.L2DeviceNew{
+			ID:           device.MAC,
+			Vendor:       device.Vendor,
+			ScanTimes:    []string{scanTime},
+			ScannerTypes: []string{"arp"},
+		}
+
+		if device.IP != "" {
+			l2Device.IPAddresses = []string{device.IP}
+		}
+
+		if err := hs.repo.SaveOrUpdateL2Device(l2Device); err != nil {
+			log.Printf("Failed to save L2 device from ARP response: %v", err)
+		} else {
+			log.Printf("Successfully saved L2 device: %s", device.MAC)
+		}
+	}
+}
+
+// ProcessICMPToL3Devices processes ICMP response and saves to L3 devices in new format
+func (hs *HistoryService) ProcessICMPToL3Devices(result models.ICMPResponse) {
+	if hs.repo == nil {
+		return
+	}
+
+	scanTime := time.Now().Format(time.RFC3339)
+
+	for _, icmpResult := range result.Results {
+		// Skip if packets didn't reach (not found)
+		if icmpResult.PacketsReceived == 0 {
+			continue
+		}
+
+		if icmpResult.Address == "" {
+			continue
+		}
+
+		packetsReached := fmt.Sprintf("%d/%d", icmpResult.PacketsReceived, icmpResult.PacketsSent)
+		l3Device := &models.L3DeviceNew{
+			ID:             icmpResult.Address,
+			PacketsReached:  []string{packetsReached},
+			ScanTimes:       []string{scanTime},
+			ScannerTypes:    []string{"icmp"},
+		}
+
+		if err := hs.repo.SaveOrUpdateL3Device(l3Device); err != nil {
+			log.Printf("Failed to save L3 device from ICMP response: %v", err)
+		} else {
+			log.Printf("Successfully saved L3 device: %s", icmpResult.Address)
+		}
+	}
+}
+
+// ProcessNmapTcpUdpToL3Devices processes Nmap TCP/UDP response and saves to L3 devices in new format
+func (hs *HistoryService) ProcessNmapTcpUdpToL3Devices(result models.NmapTcpUdpResponse) {
+	if hs.repo == nil {
+		return
+	}
+
+	scanTime := time.Now().Format(time.RFC3339)
+
+	if result.Host == "" {
+		return
+	}
+
+	var tcpPorts []string
+	var udpPorts []string
+
+	for _, portInfo := range result.PortInfo {
+		for i, port := range portInfo.AllPorts {
+			if i < len(portInfo.Protocols) {
+				if portInfo.Protocols[i] == "tcp" && portInfo.State[i] == "open" {
+					tcpPorts = append(tcpPorts, fmt.Sprintf("%d", port))
+				} else if portInfo.Protocols[i] == "udp" && portInfo.State[i] == "open" {
+					udpPorts = append(udpPorts, fmt.Sprintf("%d", port))
+				}
+			}
+		}
+	}
+
+	l3Device := &models.L3DeviceNew{
+		ID:           result.Host,
+		TCPOpenPorts: tcpPorts,
+		UDPOpenPorts: udpPorts,
+		ScanTimes:    []string{scanTime},
+		ScannerTypes: []string{"nmap"},
+	}
+
+	if err := hs.repo.SaveOrUpdateL3Device(l3Device); err != nil {
+		log.Printf("Failed to save L3 device from Nmap TCP/UDP response: %v", err)
+	} else {
+		log.Printf("Successfully saved L3 device: %s", result.Host)
+	}
+}
+
+// ProcessNmapOsDetectionToL3Devices processes Nmap OS detection response and saves to L3 devices in new format
+func (hs *HistoryService) ProcessNmapOsDetectionToL3Devices(result models.NmapOsDetectionResponse) {
+	if hs.repo == nil {
+		return
+	}
+
+	scanTime := time.Now().Format(time.RFC3339)
+
+	if result.Host == "" {
+		return
+	}
+
+	l3Device := &models.L3DeviceNew{
+		ID:          result.Host,
+		OS:          result.Name,
+		ScanTimes:   []string{scanTime},
+		ScannerTypes: []string{"nmap"},
+	}
+
+	if err := hs.repo.SaveOrUpdateL3Device(l3Device); err != nil {
+		log.Printf("Failed to save L3 device from Nmap OS detection response: %v", err)
+	} else {
+		log.Printf("Successfully saved L3 device: %s", result.Host)
+	}
+}
+
+// ProcessNmapHostDiscoveryToL3Devices processes Nmap host discovery response and saves to L3 devices in new format
+func (hs *HistoryService) ProcessNmapHostDiscoveryToL3Devices(result models.NmapHostDiscoveryResponse) {
+	if hs.repo == nil {
+		return
+	}
+
+	scanTime := time.Now().Format(time.RFC3339)
+
+	if result.Host == "" {
+		return
+	}
+
+	l3Device := &models.L3DeviceNew{
+		ID:           result.Host,
+		DNS:          result.DNS,
+		ScanTimes:    []string{scanTime},
+		ScannerTypes: []string{"nmap"},
+	}
+
+	if err := hs.repo.SaveOrUpdateL3Device(l3Device); err != nil {
+		log.Printf("Failed to save L3 device from Nmap host discovery response: %v", err)
+	} else {
+		log.Printf("Successfully saved L3 device: %s", result.Host)
+	}
+}
+
+// LinkARPToL3Devices links MAC addresses from ARP to L3 devices
+func (hs *HistoryService) LinkARPToL3Devices(result models.ARPResponse) {
+	if hs.repo == nil {
+		return
+	}
+
+	for _, device := range result.Devices {
+		if device.Status != "online" || device.IP == "" || device.MAC == "" {
+			continue
+		}
+
+		l3Device := &models.L3DeviceNew{
+			ID:  device.IP,
+			MAC: device.MAC,
+		}
+
+		if err := hs.repo.SaveOrUpdateL3Device(l3Device); err != nil {
+			log.Printf("Failed to link MAC to L3 device: %v", err)
+		} else {
+			log.Printf("Successfully linked MAC %s to L3 device %s", device.MAC, device.IP)
+		}
 	}
 }

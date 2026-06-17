@@ -686,3 +686,301 @@ func (r *Repository) DeleteChangeEvents() error {
 	return nil
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// New L2/L3 Device Repository Methods
+// ──────────────────────────────────────────────────────────────────────────────
+
+// SaveOrUpdateL2Device saves or updates an L2 device with data accumulation
+func (r *Repository) SaveOrUpdateL2Device(device *models.L2DeviceNew) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	now := time.Now()
+	device.LastSeen = now
+
+	// Try to find existing device
+	var existing models.L2DeviceNew
+	err := r.db.ARPCollection().FindOne(ctx, bson.M{"_id": device.ID}).Decode(&existing)
+
+	if err == nil {
+		// Device exists, update it with accumulated data
+		update := bson.M{
+			"$set": bson.M{
+				"last_seen": now,
+			},
+		}
+
+		// Append new scan times if not already present
+		if len(device.ScanTimes) > 0 {
+			uniqueScanTimes := append(existing.ScanTimes, device.ScanTimes...)
+			update["$set"].(bson.M)["scan_times"] = uniqueScanTimes
+		}
+
+		// Update vendor if provided
+		if device.Vendor != "" && device.Vendor != existing.Vendor {
+			update["$set"].(bson.M)["vendor"] = device.Vendor
+		}
+
+		// Append new scanner types if not already present
+		if len(device.ScannerTypes) > 0 {
+			uniqueScannerTypes := append(existing.ScannerTypes, device.ScannerTypes...)
+			update["$set"].(bson.M)["scanner_types"] = uniqueScannerTypes
+		}
+
+		// Append new IP addresses if not already present
+		if len(device.IPAddresses) > 0 {
+			uniqueIPs := append(existing.IPAddresses, device.IPAddresses...)
+			update["$set"].(bson.M)["ip_addresses"] = uniqueIPs
+		}
+
+		_, err = r.db.ARPCollection().UpdateOne(ctx, bson.M{"_id": device.ID}, update)
+		if err != nil {
+			log.Printf("Error updating L2 device: %v", err)
+			return err
+		}
+		log.Printf("L2 device updated successfully: %s", device.ID)
+	} else {
+		// Device doesn't exist, insert new one
+		device.FirstSeen = now
+		_, err = r.db.ARPCollection().InsertOne(ctx, device)
+		if err != nil {
+			log.Printf("Error inserting L2 device: %v", err)
+			return err
+		}
+		log.Printf("L2 device inserted successfully: %s", device.ID)
+	}
+
+	return nil
+}
+
+// GetL2Device retrieves a single L2 device by MAC address
+func (r *Repository) GetL2Device(mac string) (*models.L2DeviceNew, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var device models.L2DeviceNew
+	err := r.db.ARPCollection().FindOne(ctx, bson.M{"_id": mac}).Decode(&device)
+	if err != nil {
+		return nil, err
+	}
+	return &device, nil
+}
+
+// GetAllL2Devices retrieves all L2 devices
+func (r *Repository) GetAllL2Devices() ([]models.L2DeviceNew, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cursor, err := r.db.ARPCollection().Find(ctx, bson.D{})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var devices []models.L2DeviceNew
+	if err = cursor.All(ctx, &devices); err != nil {
+		return nil, err
+	}
+
+	return devices, nil
+}
+
+// DeleteAllL2Devices removes all L2 devices
+func (r *Repository) DeleteAllL2Devices() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	result, err := r.db.ARPCollection().DeleteMany(ctx, bson.D{})
+	if err != nil {
+		log.Printf("Error deleting L2 devices: %v", err)
+		return err
+	}
+	log.Printf("Deleted %d L2 device records", result.DeletedCount)
+	return nil
+}
+
+// SaveOrUpdateL3Device saves or updates an L3 device with data accumulation
+func (r *Repository) SaveOrUpdateL3Device(device *models.L3DeviceNew) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	now := time.Now()
+	device.LastSeen = now
+
+	// Try to find existing device
+	var existing models.L3DeviceNew
+	err := r.db.ICMPCollection().FindOne(ctx, bson.M{"_id": device.ID}).Decode(&existing)
+
+	if err == nil {
+		// Device exists, update it with accumulated data
+		update := bson.M{
+			"$set": bson.M{
+				"last_seen": now,
+			},
+		}
+
+		// Update MAC if provided (and not just "-")
+		if device.MAC != "" && device.MAC != "-" {
+			if existing.MAC == "-" || existing.MAC == "" {
+				update["$set"].(bson.M)["mac"] = device.MAC
+			}
+		}
+
+		// Append TCP ports if provided
+		if len(device.TCPOpenPorts) > 0 {
+			uniquePorts := append(existing.TCPOpenPorts, device.TCPOpenPorts...)
+			update["$set"].(bson.M)["tcp_open_ports"] = uniquePorts
+		}
+
+		// Append UDP ports if provided
+		if len(device.UDPOpenPorts) > 0 {
+			uniquePorts := append(existing.UDPOpenPorts, device.UDPOpenPorts...)
+			update["$set"].(bson.M)["udp_open_ports"] = uniquePorts
+		}
+
+		// Update OS if provided (and not just "-")
+		if device.OS != "" && device.OS != "-" {
+			if existing.OS == "-" || existing.OS == "" {
+				update["$set"].(bson.M)["os"] = device.OS
+			}
+		}
+
+		// Update DNS if provided (and not just "-")
+		if device.DNS != "" && device.DNS != "-" {
+			if existing.DNS == "-" || existing.DNS == "" {
+				update["$set"].(bson.M)["dns"] = device.DNS
+			}
+		}
+
+		// Append packets reached if provided
+		if len(device.PacketsReached) > 0 {
+			uniquePackets := append(existing.PacketsReached, device.PacketsReached...)
+			update["$set"].(bson.M)["packets_reached"] = uniquePackets
+		}
+
+		// Append scan times if provided
+		if len(device.ScanTimes) > 0 {
+			uniqueScanTimes := append(existing.ScanTimes, device.ScanTimes...)
+			update["$set"].(bson.M)["scan_times"] = uniqueScanTimes
+		}
+
+		// Update TCP banner if provided (and not just "-")
+		if device.TCPBanner != "" && device.TCPBanner != "-" {
+			if existing.TCPBanner == "-" || existing.TCPBanner == "" {
+				update["$set"].(bson.M)["tcp_banner"] = device.TCPBanner
+			}
+		}
+
+		// Append scanner types if provided
+		if len(device.ScannerTypes) > 0 {
+			uniqueScannerTypes := append(existing.ScannerTypes, device.ScannerTypes...)
+			update["$set"].(bson.M)["scanner_types"] = uniqueScannerTypes
+		}
+
+		_, err = r.db.ICMPCollection().UpdateOne(ctx, bson.M{"_id": device.ID}, update)
+		if err != nil {
+			log.Printf("Error updating L3 device: %v", err)
+			return err
+		}
+		log.Printf("L3 device updated successfully: %s", device.ID)
+	} else {
+		// Device doesn't exist, insert new one
+		device.FirstSeen = now
+		// Set default values for fields that might be "-"
+		if device.MAC == "" {
+			device.MAC = "-"
+		}
+		if device.OS == "" {
+			device.OS = "-"
+		}
+		if device.DNS == "" {
+			device.DNS = "-"
+		}
+		if device.TCPBanner == "" {
+			device.TCPBanner = "-"
+		}
+		_, err = r.db.ICMPCollection().InsertOne(ctx, device)
+		if err != nil {
+			log.Printf("Error inserting L3 device: %v", err)
+			return err
+		}
+		log.Printf("L3 device inserted successfully: %s", device.ID)
+	}
+
+	return nil
+}
+
+// GetL3Device retrieves a single L3 device by IP address
+func (r *Repository) GetL3Device(ip string) (*models.L3DeviceNew, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var device models.L3DeviceNew
+	err := r.db.ICMPCollection().FindOne(ctx, bson.M{"_id": ip}).Decode(&device)
+	if err != nil {
+		return nil, err
+	}
+	return &device, nil
+}
+
+// GetAllL3Devices retrieves all L3 devices
+func (r *Repository) GetAllL3Devices() ([]models.L3DeviceNew, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cursor, err := r.db.ICMPCollection().Find(ctx, bson.D{})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var devices []models.L3DeviceNew
+	if err = cursor.All(ctx, &devices); err != nil {
+		return nil, err
+	}
+
+	return devices, nil
+}
+
+// DeleteAllL3Devices removes all L3 devices
+func (r *Repository) DeleteAllL3Devices() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	result, err := r.db.ICMPCollection().DeleteMany(ctx, bson.D{})
+	if err != nil {
+		log.Printf("Error deleting L3 devices: %v", err)
+		return err
+	}
+	log.Printf("Deleted %d L3 device records", result.DeletedCount)
+	return nil
+}
+
+// DropL2Collection drops the entire L2 collection
+func (r *Repository) DropL2Collection() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	err := r.db.ARPCollection().Drop(ctx)
+	if err != nil {
+		log.Printf("Error dropping L2 collection: %v", err)
+		return err
+	}
+	log.Printf("L2 collection dropped successfully")
+	return nil
+}
+
+// DropL3Collection drops the entire L3 collection
+func (r *Repository) DropL3Collection() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	err := r.db.ICMPCollection().Drop(ctx)
+	if err != nil {
+		log.Printf("Error dropping L3 collection: %v", err)
+		return err
+	}
+	log.Printf("L3 collection dropped successfully")
+	return nil
+}
+

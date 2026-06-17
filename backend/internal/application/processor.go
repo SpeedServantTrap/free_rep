@@ -3,6 +3,7 @@ package application
 import (
 	"backend/domain/models"
 	"backend/internal/application/services"
+	"log"
 	rabbitmq "backend/internal/infrastructure/messaging"
 )
 
@@ -115,4 +116,59 @@ func (a *App) DeleteNmapOsDetectionHistory() error {
 
 func (a *App) DeleteNmapHostDiscoveryHistory() error {
 	return a.historyService.GetRepo().DeleteNmapHostDiscoveryHistory()
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// New L2/L3 Device Management Methods
+// ──────────────────────────────────────────────────────────────────────────────
+
+func (a *App) GetAllL2Devices() ([]models.L2DeviceNew, error) {
+	return a.historyService.GetRepo().GetAllL2Devices()
+}
+
+func (a *App) GetL2Device(mac string) (*models.L2DeviceNew, error) {
+	return a.historyService.GetRepo().GetL2Device(mac)
+}
+
+func (a *App) DeleteAllL2Devices() error {
+	return a.historyService.GetRepo().DeleteAllL2Devices()
+}
+
+func (a *App) DropL2Collection() error {
+	return a.historyService.GetRepo().DropL2Collection()
+}
+
+func (a *App) GetAllL3Devices() ([]models.L3DeviceNew, error) {
+	return a.historyService.GetRepo().GetAllL3Devices()
+}
+
+func (a *App) GetL3Device(ip string) (*models.L3DeviceNew, error) {
+	return a.historyService.GetRepo().GetL3Device(ip)
+}
+
+func (a *App) DeleteAllL3Devices() error {
+	return a.historyService.GetRepo().DeleteAllL3Devices()
+}
+
+func (a *App) DropL3Collection() error {
+	return a.historyService.GetRepo().DropL3Collection()
+}
+
+// MigrateToNewFormat drops old collections and initializes new format
+func (a *App) MigrateToNewFormat() error {
+	log.Printf("Starting migration to new L2/L3 format...")
+
+	// Drop old collections
+	if err := a.DropL2Collection(); err != nil {
+		log.Printf("Error dropping L2 collection: %v", err)
+		return err
+	}
+
+	if err := a.DropL3Collection(); err != nil {
+		log.Printf("Error dropping L3 collection: %v", err)
+		return err
+	}
+
+	log.Printf("Migration to new format completed successfully")
+	return nil
 }

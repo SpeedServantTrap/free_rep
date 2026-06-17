@@ -10,9 +10,10 @@ import (
 )
 
 func UDPScan(ctx context.Context, target string, ports string) (*nmap.Run, error) {
-	scanCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	scanCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 
+	// Try with privileged mode first
 	udpScanner, err := nmap.NewScanner(
 		scanCtx,
 		nmap.WithTargets(target),
@@ -21,10 +22,24 @@ func UDPScan(ctx context.Context, target string, ports string) (*nmap.Run, error
 		nmap.WithPrivileged(),
 		nmap.WithSkipHostDiscovery(),
 		nmap.WithTimingTemplate(3),
+		nmap.WithMaxRetries(2),
 	)
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to create UDP scanner: %w", err)
+		log.Printf("Failed to create privileged UDP scanner, trying unprivileged: %v", err)
+		// Fallback to unprivileged mode
+		udpScanner, err = nmap.NewScanner(
+			scanCtx,
+			nmap.WithTargets(target),
+			nmap.WithPorts(ports),
+			nmap.WithUDPScan(),
+			nmap.WithSkipHostDiscovery(),
+			nmap.WithTimingTemplate(3),
+			nmap.WithMaxRetries(2),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create unprivileged UDP scanner: %w", err)
+		}
 	}
 
 	result, warnings, err := udpScanner.Run()
@@ -33,7 +48,7 @@ func UDPScan(ctx context.Context, target string, ports string) (*nmap.Run, error
 	}
 
 	if len(*warnings) > 0 {
-		log.Printf("Scan warning: %v\n", *warnings)
+		log.Printf("UDP scan warning: %v\n", *warnings)
 	}
 
 	return result, nil
@@ -50,6 +65,7 @@ func TCPScan(ctx context.Context, target string, ports string) (*nmap.Run, error
 		nmap.WithConnectScan(),
 		nmap.WithSkipHostDiscovery(),
 		nmap.WithTimingTemplate(3),
+		nmap.WithMaxRetries(1),
 	)
 
 	if err != nil {
@@ -62,7 +78,7 @@ func TCPScan(ctx context.Context, target string, ports string) (*nmap.Run, error
 	}
 
 	if len(*warnings) > 0 {
-		log.Printf("Scan warning: %v\n", *warnings)
+		log.Printf("TCP scan warning: %v\n", *warnings)
 	}
 
 	return result, nil
