@@ -358,3 +358,147 @@ func (h *SearchHandler) serveHistoryByID(w http.ResponseWriter, r *http.Request,
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(models.HistoryResponse{Success: true, Data: rec})
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// New L2/L3 Device Search Endpoints
+// ──────────────────────────────────────────────────────────────────────────────
+
+func (h *SearchHandler) SearchL2Device(w http.ResponseWriter, r *http.Request) {
+	h.setCORS(w)
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	mac := strings.TrimSpace(r.URL.Query().Get("mac"))
+	if mac == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(SearchResponse{Success: false, Error: "mac parameter required"})
+		return
+	}
+
+	device, err := h.app.GetL2Device(mac)
+	if err != nil {
+		log.Printf("Search L2 device by MAC: %v", err)
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(SearchResponse{Success: true, Found: false})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(SearchResponse{
+		Success: true, Found: true, Data: device, Count: 1,
+	})
+}
+
+func (h *SearchHandler) SearchL3Device(w http.ResponseWriter, r *http.Request) {
+	h.setCORS(w)
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ip := strings.TrimSpace(r.URL.Query().Get("ip"))
+	if ip == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(SearchResponse{Success: false, Error: "ip parameter required"})
+		return
+	}
+
+	device, err := h.app.GetL3Device(ip)
+	if err != nil {
+		log.Printf("Search L3 device by IP: %v", err)
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(SearchResponse{Success: true, Found: false})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(SearchResponse{
+		Success: true, Found: true, Data: device, Count: 1,
+	})
+}
+
+func (h *SearchHandler) UniversalSearch(w http.ResponseWriter, r *http.Request) {
+	h.setCORS(w)
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var body struct {
+		Query string `json:"query"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(SearchResponse{Success: false, Error: "invalid JSON"})
+		return
+	}
+
+	query := strings.TrimSpace(body.Query)
+	if query == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(SearchResponse{Success: false, Error: "query required"})
+		return
+	}
+
+	// Parse query format: "mac:xx:xx:xx:xx:xx:xx" or "ip:x.x.x.x"
+	var result interface{}
+	var found bool
+
+	if strings.HasPrefix(strings.ToLower(query), "mac:") {
+		mac := strings.TrimSpace(strings.TrimPrefix(strings.ToLower(query), "mac:"))
+		device, err := h.app.GetL2Device(mac)
+		if err == nil {
+			result = device
+			found = true
+		}
+	} else if strings.HasPrefix(strings.ToLower(query), "ip:") {
+		ip := strings.TrimSpace(strings.TrimPrefix(strings.ToLower(query), "ip:"))
+		device, err := h.app.GetL3Device(ip)
+		if err == nil {
+			result = device
+			found = true
+		}
+	} else {
+		// Try to detect if it's a MAC or IP address
+		if strings.Contains(query, ":") && !strings.Contains(query, ".") {
+			// Looks like MAC address
+			device, err := h.app.GetL2Device(query)
+			if err == nil {
+				result = device
+				found = true
+			}
+		} else if strings.Contains(query, ".") {
+			// Looks like IP address
+			device, err := h.app.GetL3Device(query)
+			if err == nil {
+				result = device
+				found = true
+			}
+		}
+	}
+
+	if !found {
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(SearchResponse{Success: true, Found: false})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(SearchResponse{
+		Success: true, Found: true, Data: result, Count: 1,
+	})
+}

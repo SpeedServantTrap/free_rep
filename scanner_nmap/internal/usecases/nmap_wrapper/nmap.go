@@ -23,6 +23,7 @@ func UDPScan(ctx context.Context, target string, ports string) (*nmap.Run, error
 		nmap.WithSkipHostDiscovery(),
 		nmap.WithTimingTemplate(3),
 		nmap.WithMaxRetries(2),
+		nmap.WithOpenOnly(), // Only report open ports
 	)
 
 	if err != nil {
@@ -36,6 +37,7 @@ func UDPScan(ctx context.Context, target string, ports string) (*nmap.Run, error
 			nmap.WithSkipHostDiscovery(),
 			nmap.WithTimingTemplate(3),
 			nmap.WithMaxRetries(2),
+			nmap.WithOpenOnly(), // Only report open ports
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create unprivileged UDP scanner: %w", err)
@@ -66,6 +68,7 @@ func TCPScan(ctx context.Context, target string, ports string) (*nmap.Run, error
 		nmap.WithSkipHostDiscovery(),
 		nmap.WithTimingTemplate(3),
 		nmap.WithMaxRetries(1),
+		nmap.WithOpenOnly(), // Only report open ports
 	)
 
 	if err != nil {

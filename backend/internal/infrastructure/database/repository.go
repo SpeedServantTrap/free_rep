@@ -12,6 +12,21 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+// removeDuplicates removes duplicate strings from a slice
+func removeDuplicates(slice []string) []string {
+	seen := make(map[string]struct{})
+	result := []string{}
+
+	for _, item := range slice {
+		if _, exists := seen[item]; !exists {
+			seen[item] = struct{}{}
+			result = append(result, item)
+		}
+	}
+
+	return result
+}
+
 type Repository struct {
 	db *Database
 }
@@ -710,9 +725,10 @@ func (r *Repository) SaveOrUpdateL2Device(device *models.L2DeviceNew) error {
 			},
 		}
 
-		// Append new scan times if not already present
+		// Append new scan times if not already present (removing duplicates)
 		if len(device.ScanTimes) > 0 {
 			uniqueScanTimes := append(existing.ScanTimes, device.ScanTimes...)
+			uniqueScanTimes = removeDuplicates(uniqueScanTimes)
 			update["$set"].(bson.M)["scan_times"] = uniqueScanTimes
 		}
 
@@ -721,15 +737,17 @@ func (r *Repository) SaveOrUpdateL2Device(device *models.L2DeviceNew) error {
 			update["$set"].(bson.M)["vendor"] = device.Vendor
 		}
 
-		// Append new scanner types if not already present
+		// Append new scanner types if not already present (removing duplicates)
 		if len(device.ScannerTypes) > 0 {
 			uniqueScannerTypes := append(existing.ScannerTypes, device.ScannerTypes...)
+			uniqueScannerTypes = removeDuplicates(uniqueScannerTypes)
 			update["$set"].(bson.M)["scanner_types"] = uniqueScannerTypes
 		}
 
-		// Append new IP addresses if not already present
+		// Append new IP addresses if not already present (removing duplicates)
 		if len(device.IPAddresses) > 0 {
 			uniqueIPs := append(existing.IPAddresses, device.IPAddresses...)
+			uniqueIPs = removeDuplicates(uniqueIPs)
 			update["$set"].(bson.M)["ip_addresses"] = uniqueIPs
 		}
 
@@ -826,15 +844,17 @@ func (r *Repository) SaveOrUpdateL3Device(device *models.L3DeviceNew) error {
 			}
 		}
 
-		// Append TCP ports if provided
+		// Append TCP ports if provided (removing duplicates)
 		if len(device.TCPOpenPorts) > 0 {
 			uniquePorts := append(existing.TCPOpenPorts, device.TCPOpenPorts...)
+			uniquePorts = removeDuplicates(uniquePorts)
 			update["$set"].(bson.M)["tcp_open_ports"] = uniquePorts
 		}
 
-		// Append UDP ports if provided
+		// Append UDP ports if provided (removing duplicates)
 		if len(device.UDPOpenPorts) > 0 {
 			uniquePorts := append(existing.UDPOpenPorts, device.UDPOpenPorts...)
+			uniquePorts = removeDuplicates(uniquePorts)
 			update["$set"].(bson.M)["udp_open_ports"] = uniquePorts
 		}
 
@@ -852,15 +872,17 @@ func (r *Repository) SaveOrUpdateL3Device(device *models.L3DeviceNew) error {
 			}
 		}
 
-		// Append packets reached if provided
+		// Append packets reached if provided (removing duplicates)
 		if len(device.PacketsReached) > 0 {
 			uniquePackets := append(existing.PacketsReached, device.PacketsReached...)
+			uniquePackets = removeDuplicates(uniquePackets)
 			update["$set"].(bson.M)["packets_reached"] = uniquePackets
 		}
 
-		// Append scan times if provided
+		// Append scan times if provided (removing duplicates)
 		if len(device.ScanTimes) > 0 {
 			uniqueScanTimes := append(existing.ScanTimes, device.ScanTimes...)
+			uniqueScanTimes = removeDuplicates(uniqueScanTimes)
 			update["$set"].(bson.M)["scan_times"] = uniqueScanTimes
 		}
 
@@ -871,9 +893,10 @@ func (r *Repository) SaveOrUpdateL3Device(device *models.L3DeviceNew) error {
 			}
 		}
 
-		// Append scanner types if provided
+		// Append scanner types if provided (removing duplicates)
 		if len(device.ScannerTypes) > 0 {
 			uniqueScannerTypes := append(existing.ScannerTypes, device.ScannerTypes...)
+			uniqueScannerTypes = removeDuplicates(uniqueScannerTypes)
 			update["$set"].(bson.M)["scanner_types"] = uniqueScannerTypes
 		}
 

@@ -74,10 +74,14 @@ func UdpTcpScanner(ctx context.Context, request domain.ScanTcpUdpRequest) (respo
 
 		for _, port := range host.Ports {
 			totalPorts++
-			fmt.Printf("Processing port %d: Protocol=%s, State=%s\n", port.ID, port.Protocol, port.State.State)
+			fmt.Printf("Processing port %d: Protocol=%s, State=%s, Reason=%s\n",
+				port.ID, port.Protocol, port.State.State, port.State.Reason)
 
 			// Only add ports that are actually open
-			if port.State.State != "open" {
+			// Check for both "open" and "open|filtered" states
+			isOpen := port.State.State == "open" || port.State.State == "open|filtered"
+
+			if !isOpen {
 				fmt.Printf("  Skipping port %d - not open (state: %s)\n", port.ID, port.State.State)
 				continue
 			}
@@ -92,11 +96,11 @@ func UdpTcpScanner(ctx context.Context, request domain.ScanTcpUdpRequest) (respo
 				serviceName = "unknown"
 			}
 			portInfo.ServiceName = append(portInfo.ServiceName, serviceName)
-			fmt.Printf("  Added open port %d (%s)\n", port.ID, port.Protocol)
+			fmt.Printf("  Added open port %d (%s) - Service: %s\n", port.ID, port.Protocol, serviceName)
 		}
 	}
 
-	fmt.Printf("%s scan completed: Total ports scanned: %d, Open ports found: %d\n", scanType, totalPorts, openPorts)
+	fmt.Printf("%s scan completed: Total ports in results: %d, Open ports found: %d\n", scanType, totalPorts, openPorts)
 
 	responseResult := domain.ScanTcpUdpResponse{
 		TaskID:   request.TaskID,

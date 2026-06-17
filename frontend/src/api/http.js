@@ -22,6 +22,15 @@ export const api = {
     body:    JSON.stringify(body),
   }),
 
+  // ── New L2/L3 Device Search ─────────────────────────────────────────────────
+  searchL2: (mac) => request(`/search/l2?mac=${encodeURIComponent(mac)}`),
+  searchL3: (ip) => request(`/search/l3?ip=${encodeURIComponent(ip)}`),
+  universalSearch: (query) => request('/search/universal', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ query }),
+  }),
+
   // ── Change Detection ──────────────────────────────────────────────────────
   getChanges:    (params = {}) => {
     const q = new URLSearchParams(params).toString()

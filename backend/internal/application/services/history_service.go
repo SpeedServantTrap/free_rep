@@ -416,23 +416,42 @@ func (hs *HistoryService) ProcessNmapTcpUdpToL3Devices(result models.NmapTcpUdpR
 	scanTime := time.Now().Format(time.RFC3339)
 
 	if result.Host == "" {
+		log.Printf("Skipping L3 device save - empty host")
 		return
 	}
 
 	var tcpPorts []string
 	var udpPorts []string
 
+	log.Printf("Processing Nmap TCP/UDP response for host: %s, PortInfo count: %d", result.Host, len(result.PortInfo))
+
 	for _, portInfo := range result.PortInfo {
+		log.Printf("Processing PortInfo: Status=%s, TotalPorts=%d", portInfo.Status, len(portInfo.AllPorts))
+
 		for i, port := range portInfo.AllPorts {
-			if i < len(portInfo.Protocols) {
-				if portInfo.Protocols[i] == "tcp" && portInfo.State[i] == "open" {
-					tcpPorts = append(tcpPorts, fmt.Sprintf("%d", port))
-				} else if portInfo.Protocols[i] == "udp" && portInfo.State[i] == "open" {
-					udpPorts = append(udpPorts, fmt.Sprintf("%d", port))
+			if i < len(portInfo.Protocols) && i < len(portInfo.State) {
+				protocol := portInfo.Protocols[i]
+				state := portInfo.State[i]
+
+				log.Printf("Port %d: Protocol=%s, State=%s", port, protocol, state)
+
+				// Check for open ports (including open|filtered for UDP)
+				isOpen := state == "open" || state == "open|filtered"
+
+				if protocol == "tcp" && isOpen {
+					portStr := fmt.Sprintf("%d", port)
+					tcpPorts = append(tcpPorts, portStr)
+					log.Printf("Added TCP open port: %s", portStr)
+				} else if protocol == "udp" && isOpen {
+					portStr := fmt.Sprintf("%d", port)
+					udpPorts = append(udpPorts, portStr)
+					log.Printf("Added UDP open port: %s", portStr)
 				}
 			}
 		}
 	}
+
+	log.Printf("Final TCP ports: %v, UDP ports: %v", tcpPorts, udpPorts)
 
 	l3Device := &models.L3DeviceNew{
 		ID:           result.Host,
@@ -445,7 +464,7 @@ func (hs *HistoryService) ProcessNmapTcpUdpToL3Devices(result models.NmapTcpUdpR
 	if err := hs.repo.SaveOrUpdateL3Device(l3Device); err != nil {
 		log.Printf("Failed to save L3 device from Nmap TCP/UDP response: %v", err)
 	} else {
-		log.Printf("Successfully saved L3 device: %s", result.Host)
+		log.Printf("Successfully saved L3 device: %s with TCP ports: %v, UDP ports: %v", result.Host, tcpPorts, udpPorts)
 	}
 }
 

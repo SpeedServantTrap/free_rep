@@ -82,6 +82,11 @@ func main() {
 	http.HandleFunc("/api/search/arp",  searchHandler.SearchARP)
 	http.HandleFunc("/api/search/tcp",  searchHandler.SearchTCP)
 
+	// New L2/L3 device search endpoints
+	http.HandleFunc("/api/search/l2", searchHandler.SearchL2Device)
+	http.HandleFunc("/api/search/l3", searchHandler.SearchL3Device)
+	http.HandleFunc("/api/search/universal", searchHandler.UniversalSearch)
+
 	http.HandleFunc("/api/history/arp/delete",  historyHandler.DeleteARPHistory)
 	http.HandleFunc("/api/history/icmp/delete", historyHandler.DeleteICMPHistory)
 	http.HandleFunc("/api/history/nmap/delete", historyHandler.DeleteNmapHistory)
