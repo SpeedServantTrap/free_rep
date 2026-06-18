@@ -839,11 +839,14 @@ func (r *Repository) GetL3Device(ip string) (*models.L3DeviceNew, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	log.Printf("[GetL3Device] Searching for device with IP: '%s'", ip)
 	var device models.L3DeviceNew
 	err := r.db.ICMPCollection().FindOne(ctx, bson.M{"_id": ip}).Decode(&device)
 	if err != nil {
+		log.Printf("[GetL3Device] Device not found for IP: '%s', error: %v", ip, err)
 		return nil, err
 	}
+	log.Printf("[GetL3Device] Found device for IP: '%s', MAC: '%s'", ip, device.MAC)
 	return &device, nil
 }
 
@@ -852,17 +855,20 @@ func (r *Repository) GetAllL3Devices() ([]models.L3DeviceNew, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	log.Printf("[GetAllL3Devices] Retrieving all L3 devices")
 	cursor, err := r.db.ICMPCollection().Find(ctx, bson.D{})
 	if err != nil {
+		log.Printf("[GetAllL3Devices] Error finding devices: %v", err)
 		return nil, err
 	}
 	defer cursor.Close(ctx)
 
 	var devices []models.L3DeviceNew
 	if err = cursor.All(ctx, &devices); err != nil {
+		log.Printf("[GetAllL3Devices] Error decoding devices: %v", err)
 		return nil, err
 	}
-
+	log.Printf("[GetAllL3Devices] Retrieved %d L3 devices", len(devices))
 	return devices, nil
 }
 

@@ -69,15 +69,9 @@ func main() {
 	http.HandleFunc("/api/history/nmap",   historyHandler.GetNmapHistory)
 	http.HandleFunc("/api/history/tcp",    historyHandler.GetTCPHistory)
 
-	http.HandleFunc("/api/history/icmp/by-id",              searchHandler.GetICMPHistoryByID)
-	http.HandleFunc("/api/history/nmap/tcp_udp/by-id",      searchHandler.GetNmapTcpUdpHistoryByID)
-	http.HandleFunc("/api/history/nmap/os_detection/by-id", searchHandler.GetNmapOsDetectionHistoryByID)
-	http.HandleFunc("/api/history/nmap/host_discovery/by-id",searchHandler.GetNmapHostDiscoveryHistoryByID)
-	http.HandleFunc("/api/history/tcp/by-id",               searchHandler.GetTCPHistoryByID)
-
-	http.HandleFunc("/api/search/icmp", searchHandler.SearchICMP)
-	http.HandleFunc("/api/search/nmap", searchHandler.SearchNmap)
-	http.HandleFunc("/api/search/tcp",  searchHandler.SearchTCP)
+	http.HandleFunc("/api/history/icmp/delete", historyHandler.DeleteICMPHistory)
+	http.HandleFunc("/api/history/nmap/delete", historyHandler.DeleteNmapHistory)
+	http.HandleFunc("/api/history/tcp/delete",  historyHandler.DeleteTCPHistory)
 
 	// New L2/L3 device search endpoints
 	http.HandleFunc("/api/search/l2", searchHandler.SearchL2Device)
@@ -87,10 +81,6 @@ func main() {
 	// New L2/L3 device display endpoints
 	http.HandleFunc("/api/devices/l2", searchHandler.GetAllL2Devices)
 	http.HandleFunc("/api/devices/l3", searchHandler.GetAllL3Devices)
-
-	http.HandleFunc("/api/history/icmp/delete", historyHandler.DeleteICMPHistory)
-	http.HandleFunc("/api/history/nmap/delete", historyHandler.DeleteNmapHistory)
-	http.HandleFunc("/api/history/tcp/delete",  historyHandler.DeleteTCPHistory)
 
 	// ── /ws — proxied through appHolder; returns 503 while RabbitMQ not ready ─
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {

@@ -450,13 +450,3 @@ func (h *HistoryHandler) DeleteTCPHistory(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
 }
-
-// Helper function to check if a scanner type exists in the list
-func hasScannerType(scannerTypes []string, scannerType string) bool {
-	for _, st := range scannerTypes {
-		if st == scannerType {
-			return true
-		}
-	}
-	return false
-}
