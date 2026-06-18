@@ -74,8 +74,8 @@ func (d *Database) Close() error {
 
 // ── L2 (MAC / ARP layer) ──────────────────────────────────────────────────────
 
-// ARPCollection — ARP scan history, keyed by MAC address layer.
-func (d *Database) ARPCollection() *mongo.Collection {
+// L2DevicesCollection — L2 device inventory for new structure (MAC as _id)
+func (d *Database) L2DevicesCollection() *mongo.Collection {
 	return d.Database.Collection("l2_devices")
 }
 
@@ -99,10 +99,8 @@ func (d *Database) NmapHostDiscoveryCollection() *mongo.Collection {
 	return d.Database.Collection("l3_devices")
 }
 
-// ── L4 (Transport layer — TCP banner grabber) ─────────────────────────────────
-
 func (d *Database) TCPCollection() *mongo.Collection {
-	return d.Database.Collection("l4_devices")
+	return d.Database.Collection("l3_devices")
 }
 
 func (d *Database) ChangesCollection() *mongo.Collection {

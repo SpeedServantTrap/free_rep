@@ -31,6 +31,10 @@ export const api = {
     body:    JSON.stringify({ query }),
   }),
 
+  // ── L2/L3 Device Display ───────────────────────────────────────────────────
+  getL2Devices: () => request('/devices/l2'),
+  getL3Devices: () => request('/devices/l3'),
+
   // ── Change Detection ──────────────────────────────────────────────────────
   getChanges:    (params = {}) => {
     const q = new URLSearchParams(params).toString()

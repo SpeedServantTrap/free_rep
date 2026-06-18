@@ -3,6 +3,7 @@ import { Clock, Trash2, RefreshCw, ChevronDown, ChevronRight, Network, Radio, Sh
 import { useHistory }        from '@/hooks/useHistory'
 import { Button, Badge, EmptyState, Spinner } from '@/components/ui'
 import { formatDistanceToNow, format } from 'date-fns'
+import { api } from '@/api/http'
 
 const TABS = [
   { id: 'arp',  label: 'ARP',  Icon: Network  },
@@ -66,19 +67,49 @@ function HistoryShell({ type, title, children, limit = 50 }) {
 }
 
 function ARPHistory() {
-  return (
-    <HistoryShell type="arp">
-      {(records) => !records?.length
-        ? <EmptyState title="No ARP history" description="Run an ARP scan to populate history" />
-        : <div className="card" style={{ padding: 0 }}>
-            {records.map((r) => <ARPRow key={r.id} r={r} />)}
-          </div>
+  const [devices, setDevices] = useState([])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    setLoading(true)
+    api.getL2Devices().then(res => {
+      if (res?.success) {
+        setDevices(Array.isArray(res.data) ? res.data : [])
       }
-    </HistoryShell>
+    }).finally(() => setLoading(false))
+  }, [])
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 16 }}>
+        <Button variant="ghost" size="sm" icon={<RefreshCw size={13} />} onClick={() => {
+          setLoading(true)
+          api.getL2Devices().then(res => {
+            if (res?.success) {
+              setDevices(Array.isArray(res.data) ? res.data : [])
+            }
+          }).finally(() => setLoading(false))
+        }} loading={loading}>
+          Refresh
+        </Button>
+      </div>
+
+      {loading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
+          <Spinner size="lg" />
+        </div>
+      ) : !devices?.length ? (
+        <EmptyState title="No L2 devices" description="Run an ARP scan to populate L2 devices" />
+      ) : (
+        <div className="card" style={{ padding: 0 }}>
+          {devices.map((device) => <L2DeviceRow key={device.id} device={device} />)}
+        </div>
+      )}
+    </div>
   )
 }
 
-function ARPRow({ r }) {
+function L2DeviceRow({ device }) {
   const [open, setOpen] = useState(false)
   return (
     <div className="history-item">
@@ -86,28 +117,28 @@ function ARPRow({ r }) {
         <div className="history-item-title">
           {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           <Network size={14} />
-          {r.ip_range} via {r.interface_name}
+          {device.id}
         </div>
         <div className="history-item-meta">
-          <Badge>{r.status}</Badge>
-          <span>{r.online_count}/{r.total_count} online</span>
-          <span>{r.created_at ? formatDistanceToNow(new Date(r.created_at), { addSuffix: true }) : '—'}</span>
+          <span>{device.vendor || '—'}</span>
+          <span>{device.ip_addresses?.length || 0} IPs</span>
+          <span>{device.scan_times?.length || 0} scans</span>
+          <span>{device.last_seen ? formatDistanceToNow(new Date(device.last_seen), { addSuffix: true }) : '—'}</span>
         </div>
       </div>
       {open && (
         <div className="history-item-body">
           <div className="table-wrap">
             <table>
-              <thead><tr><th>IP</th><th>MAC</th><th>Vendor</th><th>Status</th></tr></thead>
+              <thead><tr><th>MAC</th><th>Vendor</th><th>IP Addresses</th><th>Scanner Types</th><th>Last Seen</th></tr></thead>
               <tbody>
-                {(r.devices ?? []).map((d, i) => (
-                  <tr key={i}>
-                    <td className="td-mono">{d.ip}</td>
-                    <td className="td-mono">{d.mac || '—'}</td>
-                    <td className="td-muted">{d.vendor || '—'}</td>
-                    <td><Badge>{d.status}</Badge></td>
-                  </tr>
-                ))}
+                <tr>
+                  <td className="td-mono">{device.id || '—'}</td>
+                  <td className="td-muted">{device.vendor || '—'}</td>
+                  <td className="td-mono">{(device.ip_addresses ?? []).join(', ') || '—'}</td>
+                  <td><Badge>{(device.scanner_types ?? []).join(', ') || '—'}</Badge></td>
+                  <td className="td-muted">{device.last_seen ? formatDistanceToNow(new Date(device.last_seen), { addSuffix: true }) : '—'}</td>
+                </tr>
               </tbody>
             </table>
           </div>

@@ -6,22 +6,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-type ARPHistoryRecord struct {
-	ID             primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	TaskID         string      `bson:"task_id" json:"task_id"`
-	InterfaceName  string      `bson:"interface_name" json:"interface_name"`
-	IPRange        string      `bson:"ip_range" json:"ip_range"`
-	Status         string      `bson:"status" json:"status"`
-	Devices        []ARPDevice `bson:"devices" json:"devices"`
-	OnlineDevices  []ARPDevice `bson:"online_devices" json:"online_devices"`
-	OfflineDevices []ARPDevice `bson:"offline_devices" json:"offline_devices"`
-	TotalCount     int         `bson:"total_count" json:"total_count"`
-	OnlineCount    int         `bson:"online_count" json:"online_count"`
-	OfflineCount   int         `bson:"offline_count" json:"offline_count"`
-	Error          string      `bson:"error,omitempty" json:"error,omitempty"`
-	CreatedAt      time.Time   `bson:"created_at" json:"created_at"`
-}
-
 type ICMPHistoryRecord struct {
 	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
 	ScanType  string       `bson:"scan_type"  json:"-"`

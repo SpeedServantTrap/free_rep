@@ -196,9 +196,6 @@ services:
     environment:
       RABBITMQ_URL:           amqp://guest:guest@localhost:5672/
       SCANNER_NAME:           tcp_service
-      MONGODB_URI:            mongodb://localhost:27017
-      MONGODB_DATABASE:       network_scanner
-      TCP_MONGO_COLLECTION:   l4_raw_tcp
       MINIO_ENDPOINT:         localhost:9000
       MINIO_ACCESS_KEY:       minioadmin
       MINIO_SECRET_KEY:       minioadmin
@@ -207,8 +204,6 @@ services:
       TCP_READ_TIMEOUT:       10s
     depends_on:
       rabbitmq:
-        condition: service_healthy
-      mongodb:
         condition: service_healthy
       minio:
         condition: service_healthy

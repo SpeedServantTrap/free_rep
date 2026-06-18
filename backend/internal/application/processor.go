@@ -78,10 +78,6 @@ func (a *App) PublishNmapRequest(req interface{}) *models.Response {
 	return a.publisherService.PublishNmapRequest(req)
 }
 
-func (a *App) GetARPHistory(limit int) ([]models.ARPHistoryRecord, error) {
-	return a.historyService.GetRepo().GetARPHistory(limit)
-}
-
 func (a *App) GetICMPHistory(limit int) ([]models.ICMPHistoryRecord, error) {
 	return a.historyService.GetRepo().GetICMPHistory(limit)
 }
@@ -96,10 +92,6 @@ func (a *App) GetNmapOsDetectionHistory(limit int) ([]models.NmapOsDetectionHist
 
 func (a *App) GetNmapHostDiscoveryHistory(limit int) ([]models.NmapHostDiscoveryHistoryRecord, error) {
 	return a.historyService.GetRepo().GetNmapHostDiscoveryHistory(limit)
-}
-
-func (a *App) DeleteARPHistory() error {
-	return a.historyService.GetRepo().DeleteARPHistory()
 }
 
 func (a *App) DeleteICMPHistory() error {

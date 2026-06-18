@@ -185,52 +185,6 @@ func (h *SearchHandler) SearchNmap(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *SearchHandler) SearchARP(w http.ResponseWriter, r *http.Request) {
-	h.setCORS(w)
-	if r.Method == "OPTIONS" {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-	if r.Method != "POST" {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var body struct {
-		InterfaceName string `json:"interface_name"`
-		IPRange       string `json:"ip_range"`
-		Limit         int    `json:"limit"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(SearchResponse{Success: false, Error: "invalid JSON"})
-		return
-	}
-	if body.InterfaceName == "" || body.IPRange == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(SearchResponse{Success: false, Error: "interface_name and ip_range required"})
-		return
-	}
-	if body.Limit <= 0 {
-		body.Limit = 20
-	}
-
-	records, err := h.repo.GetARPHistoryByIPRange(body.IPRange, body.Limit)
-	if err != nil {
-		log.Printf("Search ARP by ip_range: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(SearchResponse{Success: false, Error: "search failed"})
-		return
-	}
-	if len(records) == 0 {
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(SearchResponse{Success: true, Found: false})
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(SearchResponse{Success: true, Found: true, FromCache: true, Data: records, Count: len(records)})
-}
-
 func (h *SearchHandler) SearchTCP(w http.ResponseWriter, r *http.Request) {
 	h.setCORS(w)
 	if r.Method == "OPTIONS" {
@@ -318,12 +272,6 @@ func (h *SearchHandler) GetNmapOsDetectionHistoryByID(w http.ResponseWriter, r *
 func (h *SearchHandler) GetNmapHostDiscoveryHistoryByID(w http.ResponseWriter, r *http.Request) {
 	h.serveHistoryByID(w, r, "nmap_host", func(id string) (interface{}, error) {
 		return h.repo.GetNmapHostDiscoveryHistoryByID(id)
-	})
-}
-
-func (h *SearchHandler) GetARPHistoryByID(w http.ResponseWriter, r *http.Request) {
-	h.serveHistoryByID(w, r, "arp", func(id string) (interface{}, error) {
-		return h.repo.GetARPHistoryByID(id)
 	})
 }
 
@@ -500,5 +448,55 @@ func (h *SearchHandler) UniversalSearch(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(SearchResponse{
 		Success: true, Found: true, Data: result, Count: 1,
+	})
+}
+
+func (h *SearchHandler) GetAllL2Devices(w http.ResponseWriter, r *http.Request) {
+	h.setCORS(w)
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	devices, err := h.app.GetAllL2Devices()
+	if err != nil {
+		log.Printf("Error getting all L2 devices: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(SearchResponse{Success: false, Error: "failed to retrieve devices"})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(SearchResponse{
+		Success: true, Data: devices, Count: len(devices),
+	})
+}
+
+func (h *SearchHandler) GetAllL3Devices(w http.ResponseWriter, r *http.Request) {
+	h.setCORS(w)
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	devices, err := h.app.GetAllL3Devices()
+	if err != nil {
+		log.Printf("Error getting all L3 devices: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(SearchResponse{Success: false, Error: "failed to retrieve devices"})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(SearchResponse{
+		Success: true, Data: devices, Count: len(devices),
 	})
 }

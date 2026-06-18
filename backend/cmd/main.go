@@ -65,7 +65,6 @@ func main() {
 	http.HandleFunc("/api/changes/delete", changesHandler.DeleteChanges)
 	http.HandleFunc("/api/changes/stream", changesHandler.StreamChanges)
 
-	http.HandleFunc("/api/history/arp",    historyHandler.GetARPHistory)
 	http.HandleFunc("/api/history/icmp",   historyHandler.GetICMPHistory)
 	http.HandleFunc("/api/history/nmap",   historyHandler.GetNmapHistory)
 	http.HandleFunc("/api/history/tcp",    historyHandler.GetTCPHistory)
@@ -74,12 +73,10 @@ func main() {
 	http.HandleFunc("/api/history/nmap/tcp_udp/by-id",      searchHandler.GetNmapTcpUdpHistoryByID)
 	http.HandleFunc("/api/history/nmap/os_detection/by-id", searchHandler.GetNmapOsDetectionHistoryByID)
 	http.HandleFunc("/api/history/nmap/host_discovery/by-id",searchHandler.GetNmapHostDiscoveryHistoryByID)
-	http.HandleFunc("/api/history/arp/by-id",               searchHandler.GetARPHistoryByID)
 	http.HandleFunc("/api/history/tcp/by-id",               searchHandler.GetTCPHistoryByID)
 
 	http.HandleFunc("/api/search/icmp", searchHandler.SearchICMP)
 	http.HandleFunc("/api/search/nmap", searchHandler.SearchNmap)
-	http.HandleFunc("/api/search/arp",  searchHandler.SearchARP)
 	http.HandleFunc("/api/search/tcp",  searchHandler.SearchTCP)
 
 	// New L2/L3 device search endpoints
@@ -87,7 +84,10 @@ func main() {
 	http.HandleFunc("/api/search/l3", searchHandler.SearchL3Device)
 	http.HandleFunc("/api/search/universal", searchHandler.UniversalSearch)
 
-	http.HandleFunc("/api/history/arp/delete",  historyHandler.DeleteARPHistory)
+	// New L2/L3 device display endpoints
+	http.HandleFunc("/api/devices/l2", searchHandler.GetAllL2Devices)
+	http.HandleFunc("/api/devices/l3", searchHandler.GetAllL3Devices)
+
 	http.HandleFunc("/api/history/icmp/delete", historyHandler.DeleteICMPHistory)
 	http.HandleFunc("/api/history/nmap/delete", historyHandler.DeleteNmapHistory)
 	http.HandleFunc("/api/history/tcp/delete",  historyHandler.DeleteTCPHistory)

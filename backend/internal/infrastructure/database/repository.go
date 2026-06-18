@@ -35,104 +35,6 @@ func NewRepository(db *Database) *Repository {
 	return &Repository{db: db}
 }
 
-func (r *Repository) SaveARPHistory(record *models.ARPHistoryRecord) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	record.CreatedAt = time.Now()
-	_, err := r.db.ARPCollection().UpdateOne(
-		ctx,
-		bson.M{"task_id": record.TaskID},
-		bson.M{"$setOnInsert": record},
-		options.Update().SetUpsert(true),
-	)
-	if err != nil {
-		log.Printf("Error saving ARP history: %v", err)
-		return err
-	}
-
-	log.Printf("ARP history saved successfully for task: %s", record.TaskID)
-	return nil
-}
-
-func (r *Repository) GetARPHistory(limit int) ([]models.ARPHistoryRecord, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}})
-	if limit > 0 {
-		opts.SetLimit(int64(limit))
-	}
-
-	cursor, err := r.db.ARPCollection().Find(ctx, bson.D{}, opts)
-	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-
-	var records []models.ARPHistoryRecord
-	if err = cursor.All(ctx, &records); err != nil {
-		return nil, err
-	}
-
-	return records, nil
-}
-
-func (r *Repository) GetARPHistoryByIPRange(ipRange string, limit int) ([]models.ARPHistoryRecord, error) {
-	if ipRange == "" {
-		return r.GetARPHistory(limit)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	filter := bson.M{"ip_range": ipRange}
-	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}})
-	if limit > 0 {
-		opts.SetLimit(int64(limit))
-	}
-	cursor, err := r.db.ARPCollection().Find(ctx, filter, opts)
-	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-
-	var records []models.ARPHistoryRecord
-	if err = cursor.All(ctx, &records); err != nil {
-		return nil, err
-	}
-	return records, nil
-}
-
-func (r *Repository) GetARPHistoryByID(id string) (*models.ARPHistoryRecord, error) {
-	objID, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return nil, err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	var rec models.ARPHistoryRecord
-	err = r.db.ARPCollection().FindOne(ctx, bson.M{"_id": objID}).Decode(&rec)
-	if err != nil {
-		return nil, err
-	}
-	return &rec, nil
-}
-
-func (r *Repository) DeleteARPHistory() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	result, err := r.db.ARPCollection().DeleteMany(ctx, bson.D{})
-	if err != nil {
-		log.Printf("Error deleting ARP history: %v", err)
-		return err
-	}
-
-	log.Printf("Deleted %d ARP history records", result.DeletedCount)
-	return nil
-}
-
 func (r *Repository) SaveICMPHistory(record *models.ICMPHistoryRecord) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -715,7 +617,7 @@ func (r *Repository) SaveOrUpdateL2Device(device *models.L2DeviceNew) error {
 
 	// Try to find existing device
 	var existing models.L2DeviceNew
-	err := r.db.ARPCollection().FindOne(ctx, bson.M{"_id": device.ID}).Decode(&existing)
+	err := r.db.L2DevicesCollection().FindOne(ctx, bson.M{"_id": device.ID}).Decode(&existing)
 
 	if err == nil {
 		// Device exists, update it with accumulated data
@@ -751,7 +653,7 @@ func (r *Repository) SaveOrUpdateL2Device(device *models.L2DeviceNew) error {
 			update["$set"].(bson.M)["ip_addresses"] = uniqueIPs
 		}
 
-		_, err = r.db.ARPCollection().UpdateOne(ctx, bson.M{"_id": device.ID}, update)
+		_, err = r.db.L2DevicesCollection().UpdateOne(ctx, bson.M{"_id": device.ID}, update)
 		if err != nil {
 			log.Printf("Error updating L2 device: %v", err)
 			return err
@@ -760,7 +662,7 @@ func (r *Repository) SaveOrUpdateL2Device(device *models.L2DeviceNew) error {
 	} else {
 		// Device doesn't exist, insert new one
 		device.FirstSeen = now
-		_, err = r.db.ARPCollection().InsertOne(ctx, device)
+		_, err = r.db.L2DevicesCollection().InsertOne(ctx, device)
 		if err != nil {
 			log.Printf("Error inserting L2 device: %v", err)
 			return err
@@ -777,7 +679,7 @@ func (r *Repository) GetL2Device(mac string) (*models.L2DeviceNew, error) {
 	defer cancel()
 
 	var device models.L2DeviceNew
-	err := r.db.ARPCollection().FindOne(ctx, bson.M{"_id": mac}).Decode(&device)
+	err := r.db.L2DevicesCollection().FindOne(ctx, bson.M{"_id": mac}).Decode(&device)
 	if err != nil {
 		return nil, err
 	}
@@ -789,7 +691,7 @@ func (r *Repository) GetAllL2Devices() ([]models.L2DeviceNew, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	cursor, err := r.db.ARPCollection().Find(ctx, bson.D{})
+	cursor, err := r.db.L2DevicesCollection().Find(ctx, bson.D{})
 	if err != nil {
 		return nil, err
 	}
@@ -808,7 +710,7 @@ func (r *Repository) DeleteAllL2Devices() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	result, err := r.db.ARPCollection().DeleteMany(ctx, bson.D{})
+	result, err := r.db.L2DevicesCollection().DeleteMany(ctx, bson.D{})
 	if err != nil {
 		log.Printf("Error deleting L2 devices: %v", err)
 		return err
@@ -887,10 +789,9 @@ func (r *Repository) SaveOrUpdateL3Device(device *models.L3DeviceNew) error {
 		}
 
 		// Update TCP banner if provided (and not just "-")
+		// Always update with new banner value to ensure latest TCP scan results are captured
 		if device.TCPBanner != "" && device.TCPBanner != "-" {
-			if existing.TCPBanner == "-" || existing.TCPBanner == "" {
-				update["$set"].(bson.M)["tcp_banner"] = device.TCPBanner
-			}
+			update["$set"].(bson.M)["tcp_banner"] = device.TCPBanner
 		}
 
 		// Append scanner types if provided (removing duplicates)
@@ -984,7 +885,7 @@ func (r *Repository) DropL2Collection() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	err := r.db.ARPCollection().Drop(ctx)
+	err := r.db.L2DevicesCollection().Drop(ctx)
 	if err != nil {
 		log.Printf("Error dropping L2 collection: %v", err)
 		return err

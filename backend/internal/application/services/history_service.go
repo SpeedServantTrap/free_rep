@@ -4,6 +4,7 @@ import (
 	"backend/domain/models"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 )
@@ -18,17 +19,11 @@ type SearchRepository interface {
 	GetNmapOsDetectionHistoryByID(id string) (*models.NmapOsDetectionHistoryRecord, error)
 	GetNmapHostDiscoveryHistoryByIP(ip string, limit int) ([]models.NmapHostDiscoveryHistoryRecord, error)
 	GetNmapHostDiscoveryHistoryByID(id string) (*models.NmapHostDiscoveryHistoryRecord, error)
-	GetARPHistoryByIPRange(ipRange string, limit int) ([]models.ARPHistoryRecord, error)
-	GetARPHistoryByID(id string) (*models.ARPHistoryRecord, error)
 	GetTCPHistoryByHostPort(host, port string, limit int) ([]models.TCPHistoryRecord, error)
 	GetTCPHistoryByID(id string) (*models.TCPHistoryRecord, error)
 }
 
 type RepositoryInterface interface {
-	SaveARPHistory(record *models.ARPHistoryRecord) error
-	GetARPHistory(limit int) ([]models.ARPHistoryRecord, error)
-	DeleteARPHistory() error
-
 	SaveICMPHistory(record *models.ICMPHistoryRecord) error
 	GetICMPHistory(limit int) ([]models.ICMPHistoryRecord, error)
 	DeleteICMPHistory() error
@@ -105,44 +100,8 @@ func (hs *HistoryService) SaveARPResponse(result models.ARPResponse) {
 	if hs.repo == nil {
 		return
 	}
-
-	var interfaceName, ipRange string
-	if cachedReq := hs.GetCachedRequest(result.TaskID); cachedReq != nil {
-		if arpReq, ok := cachedReq.(models.ARPRequest); ok {
-			interfaceName = arpReq.InterfaceName
-			ipRange = arpReq.IPRange
-		}
-	}
-
-	var onlineDevices, offlineDevices []models.ARPDevice
-	for _, device := range result.Devices {
-		if device.Status == "online" {
-			onlineDevices = append(onlineDevices, device)
-		} else {
-			offlineDevices = append(offlineDevices, device)
-		}
-	}
-
-	historyRecord := &models.ARPHistoryRecord{
-		TaskID:         result.TaskID,
-		InterfaceName:  interfaceName,
-		IPRange:        ipRange,
-		Status:         result.Status,
-		Devices:        result.Devices,
-		OnlineDevices:  onlineDevices,
-		OfflineDevices: offlineDevices,
-		TotalCount:     result.TotalCount,
-		OnlineCount:    result.OnlineCount,
-		OfflineCount:   result.OfflineCount,
-		Error:          result.Error,
-	}
-
-	if err := hs.repo.SaveARPHistory(historyRecord); err != nil {
-		log.Printf("Failed to save ARP history: %v", err)
-	} else {
-		log.Printf("Successfully saved ARP history for task %s", result.TaskID)
-		hs.RemoveCachedRequest(result.TaskID)
-	}
+	hs.ProcessARPToL2Devices(result)
+	hs.RemoveCachedRequest(result.TaskID)
 }
 
 func (hs *HistoryService) SaveICMPResponse(result models.ICMPResponse) {
@@ -317,7 +276,7 @@ func (hs *HistoryService) SaveTCPResponse(result models.TCPResponse) {
 	}
 
 	// Also save to L3 device in new format
-	if result.Status == "success" && host != "" {
+	if result.Status == "completed" && host != "" {
 		scanTime := time.Now().Format(time.RFC3339)
 		l3Device := &models.L3DeviceNew{
 			ID:            host,
@@ -328,6 +287,38 @@ func (hs *HistoryService) SaveTCPResponse(result models.TCPResponse) {
 		if err := hs.repo.SaveOrUpdateL3Device(l3Device); err != nil {
 			log.Printf("Failed to save L3 device from TCP response: %v", err)
 		}
+	}
+}
+
+// ProcessTCPToL3Devices processes TCP response and saves to L3 devices in new format
+func (hs *HistoryService) ProcessTCPToL3Devices(result models.TCPResponse) {
+	if hs.repo == nil {
+		return
+	}
+
+	var host string
+	if cachedReq := hs.GetCachedRequest(result.TaskID); cachedReq != nil {
+		if tcpReq, ok := cachedReq.(models.TCPRequest); ok {
+			host = tcpReq.Host
+		}
+	}
+
+	if result.Status != "completed" || host == "" {
+		return
+	}
+
+	scanTime := time.Now().Format(time.RFC3339)
+	l3Device := &models.L3DeviceNew{
+		ID:           host,
+		TCPBanner:    result.DecodedText,
+		ScanTimes:    []string{scanTime},
+		ScannerTypes: []string{"tcp"},
+	}
+
+	if err := hs.repo.SaveOrUpdateL3Device(l3Device); err != nil {
+		log.Printf("Failed to save L3 device from TCP response: %v", err)
+	} else {
+		log.Printf("Successfully saved L3 device from TCP response: %s", host)
 	}
 }
 
@@ -343,14 +334,22 @@ func (hs *HistoryService) ProcessARPToL2Devices(result models.ARPResponse) {
 
 	scanTime := time.Now().Format(time.RFC3339)
 
-	// Only process online devices (filter out offline as per requirements)
+	// Only process online devices with valid MAC and IP addresses to prevent database pollution
 	for _, device := range result.Devices {
+		// Skip offline devices
 		if device.Status != "online" {
 			continue
 		}
 
-		// Skip if MAC is empty (not found)
-		if device.MAC == "" {
+		// Skip if MAC is empty or invalid format
+		if device.MAC == "" || !isValidMACAddress(device.MAC) {
+			log.Printf("Skipping device with invalid or empty MAC: %s", device.MAC)
+			continue
+		}
+
+		// Skip if IP is empty or invalid format
+		if device.IP == "" || !isValidIPAddress(device.IP) {
+			log.Printf("Skipping device %s with invalid or empty IP: %s", device.MAC, device.IP)
 			continue
 		}
 
@@ -359,18 +358,58 @@ func (hs *HistoryService) ProcessARPToL2Devices(result models.ARPResponse) {
 			Vendor:       device.Vendor,
 			ScanTimes:    []string{scanTime},
 			ScannerTypes: []string{"arp"},
-		}
-
-		if device.IP != "" {
-			l2Device.IPAddresses = []string{device.IP}
+			IPAddresses:  []string{device.IP},
 		}
 
 		if err := hs.repo.SaveOrUpdateL2Device(l2Device); err != nil {
 			log.Printf("Failed to save L2 device from ARP response: %v", err)
 		} else {
-			log.Printf("Successfully saved L2 device: %s", device.MAC)
+			log.Printf("Successfully saved L2 device: MAC=%s, IP=%s", device.MAC, device.IP)
 		}
 	}
+}
+
+// isValidMACAddress checks if the MAC address has a valid format
+func isValidMACAddress(mac string) bool {
+	if mac == "" {
+		return false
+	}
+	
+	// MAC should contain colons
+	if !strings.Contains(mac, ":") && !strings.Contains(mac, "-") {
+		return false
+	}
+	
+	// Normalize to colon format for validation
+	normalized := strings.ReplaceAll(mac, "-", ":")
+	parts := strings.Split(normalized, ":")
+	
+	// Should have 6 parts
+	if len(parts) != 6 {
+		return false
+	}
+	
+	return true
+}
+
+// isValidIPAddress checks if the IP address has a basic valid format
+func isValidIPAddress(ip string) bool {
+	if ip == "" {
+		return false
+	}
+	
+	// Simple validation: IP should contain dots
+	if !strings.Contains(ip, ".") {
+		return false
+	}
+	
+	// Basic IPv4 validation
+	parts := strings.Split(ip, ".")
+	if len(parts) != 4 {
+		return false
+	}
+	
+	return true
 }
 
 // ProcessICMPToL3Devices processes ICMP response and saves to L3 devices in new format
@@ -526,14 +565,18 @@ func (hs *HistoryService) LinkARPToL3Devices(result models.ARPResponse) {
 		return
 	}
 
+	scanTime := time.Now().Format(time.RFC3339)
+
 	for _, device := range result.Devices {
 		if device.Status != "online" || device.IP == "" || device.MAC == "" {
 			continue
 		}
 
 		l3Device := &models.L3DeviceNew{
-			ID:  device.IP,
-			MAC: device.MAC,
+			ID:           device.IP,
+			MAC:          device.MAC,
+			ScanTimes:    []string{scanTime},
+			ScannerTypes: []string{"arp"},
 		}
 
 		if err := hs.repo.SaveOrUpdateL3Device(l3Device); err != nil {

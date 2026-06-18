@@ -8,9 +8,6 @@ import (
 type Config struct {
 	RabbitMQURL   string
 	ScannerName   string
-	MongoURI      string
-	MongoDB       string
-	MongoColl     string
 	MinIOEndpoint string
 	MinIOAccess   string
 	MinIOSecret   string
@@ -23,9 +20,6 @@ func Load() *Config {
 	return &Config{
 		RabbitMQURL:   getEnv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/"),
 		ScannerName:   getEnv("SCANNER_NAME", "tcp_service"),
-		MongoURI:      getEnv("MONGODB_URI", "mongodb://mongodb:27017"),
-		MongoDB:       getEnv("MONGODB_DATABASE", "network_scanner"),
-		MongoColl:     getEnv("TCP_MONGO_COLLECTION", "l4_raw_tcp"),
 		MinIOEndpoint: getEnv("MINIO_ENDPOINT", "minio:9000"),
 		MinIOAccess:   getEnv("MINIO_ACCESS_KEY", "minioadmin"),
 		MinIOSecret:   getEnv("MINIO_SECRET_KEY", "minioadmin"),

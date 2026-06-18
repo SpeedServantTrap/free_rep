@@ -28,33 +28,33 @@ func (rs *ResponseService) ProcessResponse(response *models.Response) {
 	case models.ARPResponse:
 		log.Printf("Processing ARP response")
 		rs.historyService.SaveARPResponse(result)
-		// Also process to new L2/L3 format
-		rs.historyService.ProcessARPToL2Devices(result)
+		// SaveARPResponse now handles ProcessARPToL2Devices internally
 		rs.historyService.LinkARPToL3Devices(result)
 	case models.ICMPResponse:
 		log.Printf("Processing ICMP response")
-		rs.historyService.SaveICMPResponse(result)
-		// Also process to new L3 format
+		// Only process to new L3 format, don't save separate history records
 		rs.historyService.ProcessICMPToL3Devices(result)
+		rs.historyService.RemoveCachedRequest(result.TaskID)
 	case models.NmapTcpUdpResponse:
 		log.Printf("Processing Nmap TCP/UDP response")
-		rs.historyService.SaveNmapTcpUdpResponse(result)
-		// Also process to new L3 format
+		// Only process to new L3 format, don't save separate history records
 		rs.historyService.ProcessNmapTcpUdpToL3Devices(result)
+		rs.historyService.RemoveCachedRequest(result.TaskID)
 	case models.NmapOsDetectionResponse:
 		log.Printf("Processing Nmap OS Detection response")
-		rs.historyService.SaveNmapOsDetectionResponse(result)
-		// Also process to new L3 format
+		// Only process to new L3 format, don't save separate history records
 		rs.historyService.ProcessNmapOsDetectionToL3Devices(result)
+		rs.historyService.RemoveCachedRequest(result.TaskID)
 	case models.NmapHostDiscoveryResponse:
 		log.Printf("Processing Nmap Host Discovery response")
-		rs.historyService.SaveNmapHostDiscoveryResponse(result)
-		// Also process to new L3 format
+		// Only process to new L3 format, don't save separate history records
 		rs.historyService.ProcessNmapHostDiscoveryToL3Devices(result)
+		rs.historyService.RemoveCachedRequest(result.TaskID)
 	case models.TCPResponse:
 		log.Printf("Processing TCP response")
-		rs.historyService.SaveTCPResponse(result)
-		// Also process to new L3 format (handled in SaveTCPResponse)
+		// Only process to new L3 format, don't save separate history records
+		rs.historyService.ProcessTCPToL3Devices(result)
+		rs.historyService.RemoveCachedRequest(result.TaskID)
 	default:
 		log.Printf("Unknown response type: %T", result)
 	}

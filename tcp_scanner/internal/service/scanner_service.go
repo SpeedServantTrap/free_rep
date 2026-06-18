@@ -13,16 +13,12 @@ import (
 
 	minio "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type Service struct {
 	cfg *config.Config
 	log logger.Logger
 	mq  *queue.RabbitMQ
-	mdb *mongo.Database
 	mio *minio.Client
 }
 
@@ -33,14 +29,6 @@ func Run(ctx context.Context, cfg *config.Config, log logger.Logger) error {
 	}
 	defer mq.Close()
 	log.Infof("Connected RabbitMQ, queue=%s", cfg.ScannerName)
-
-	mongoCli, err := mongo.Connect(ctx, options.Client().ApplyURI(cfg.MongoURI))
-	if err != nil {
-		return fmt.Errorf("mongo connect: %w", err)
-	}
-	defer mongoCli.Disconnect(ctx)
-	mdb := mongoCli.Database(cfg.MongoDB)
-	log.Infof("Connected MongoDB db=%s", cfg.MongoDB)
 
 	mio, err := minio.New(cfg.MinIOEndpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.MinIOAccess, cfg.MinIOSecret, ""),
@@ -60,7 +48,7 @@ func Run(ctx context.Context, cfg *config.Config, log logger.Logger) error {
 	}
 	log.Infof("Connected MinIO bucket=%s", cfg.MinIOBucket)
 
-	s := &Service{cfg: cfg, log: log, mq: mq, mdb: mdb, mio: mio}
+	s := &Service{cfg: cfg, log: log, mq: mq, mio: mio}
 	msgs, err := mq.Consume(ctx)
 	if err != nil {
 		return fmt.Errorf("consume: %w", err)
@@ -98,26 +86,7 @@ func (s *Service) handle(ctx context.Context, d queue.Delivery) {
 		if err != nil {
 			s.log.Errorf("minio put: %v", err)
 		}
-		coll := s.mdb.Collection(s.cfg.MongoColl)
-		status := "completed"
-		errorMsg := ""
-		if readErr != nil {
-			status = "failed"
-			errorMsg = readErr.Error()
-		}
-		_, err = coll.InsertOne(ctx, bson.M{
-			"task_id":        req.TaskID,
-			"host":           req.Host,
-			"port":           req.Port,
-			"hex_object_key": objKey,
-			"decoded_text":   decoded,
-			"status":         status,
-			"error":          errorMsg,
-			"created_at":     time.Now(),
-		})
-		if err != nil {
-			s.log.Errorf("mongo insert: %v", err)
-		}
+		// Removed MongoDB insertion - raw data goes to MinIO, decoded data goes to L3 via backend
 	}
 
 	if d.ReplyTo != "" {
