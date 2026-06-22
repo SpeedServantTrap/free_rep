@@ -34,8 +34,24 @@ func HandleMessage(ctx context.Context, msg queue.Delivery, rabbitMQ *queue.Rabb
 		log.Infof("Received start command for auto scanner")
 		if AutoScannerInstance != nil {
 			AutoScannerInstance.Start()
+			// Send response confirming the command was processed
+			if msg.ReplyTo != "" {
+				response := queue.ARPResponse{
+					TaskID: req.TaskID,
+					Status: "started",
+				}
+				sendControlResponse(rabbitMQ, msg, response, log)
+			}
 		} else {
 			log.Error("Auto scanner instance is not set")
+			if msg.ReplyTo != "" {
+				response := queue.ARPResponse{
+					TaskID: req.TaskID,
+					Status: "failed",
+					Error:  "Auto scanner instance is not set",
+				}
+				sendControlResponse(rabbitMQ, msg, response, log)
+			}
 		}
 		return
 	}
@@ -46,8 +62,24 @@ func HandleMessage(ctx context.Context, msg queue.Delivery, rabbitMQ *queue.Rabb
 			log.Infof("Auto scanner instance found, calling Stop()")
 			AutoScannerInstance.Stop()
 			log.Infof("Stop() called successfully")
+			// Send response confirming the command was processed
+			if msg.ReplyTo != "" {
+				response := queue.ARPResponse{
+					TaskID: req.TaskID,
+					Status: "stopped",
+				}
+				sendControlResponse(rabbitMQ, msg, response, log)
+			}
 		} else {
 			log.Error("Auto scanner instance is not set")
+			if msg.ReplyTo != "" {
+				response := queue.ARPResponse{
+					TaskID: req.TaskID,
+					Status: "failed",
+					Error:  "Auto scanner instance is not set",
+				}
+				sendControlResponse(rabbitMQ, msg, response, log)
+			}
 		}
 		return
 	}
@@ -118,5 +150,14 @@ func sendResponse(rabbitMQ *queue.RabbitMQ, msg queue.Delivery, req queue.ARPReq
 		log.Errorf("Failed to send RPC response: %v", err)
 	} else {
 		log.Infof("Successfully sent ARP response for task %s", response.TaskID)
+	}
+}
+
+func sendControlResponse(rabbitMQ *queue.RabbitMQ, msg queue.Delivery, response queue.ARPResponse, log logger.Logger) {
+	log.Infof("Sending control response: TaskID=%s, Status=%s", response.TaskID, response.Status)
+	if err := rabbitMQ.SendResponse(msg.ReplyTo, msg.CorrelationId, response); err != nil {
+		log.Errorf("Failed to send control response: %v", err)
+	} else {
+		log.Infof("Successfully sent control response for task %s", response.TaskID)
 	}
 }

@@ -14,13 +14,14 @@ import (
 )
 
 type AutoScanner struct {
-	cfg       config.Config
-	scanner   scanner.ARPScanner
-	rabbitMQ  *queue.RabbitMQ
-	log       logger.Logger
-	mu        sync.Mutex
-	running   bool
-	stopChan  chan struct{}
+	cfg        config.Config
+	scanner    scanner.ARPScanner
+	rabbitMQ   *queue.RabbitMQ
+	log        logger.Logger
+	mu         sync.Mutex
+	running    bool
+	stopChan   chan struct{}
+	cancelFunc context.CancelFunc
 }
 
 func NewAutoScanner(cfg config.Config, rabbitMQ *queue.RabbitMQ, log logger.Logger) *AutoScanner {
@@ -41,6 +42,19 @@ func (as *AutoScanner) Start() {
 		return
 	}
 
+	// Create new context and stop channel for this run
+	ctx, cancel := context.WithCancel(context.Background())
+	as.cancelFunc = cancel
+
+	// Recreate stopChan if it was closed
+	select {
+	case <-as.stopChan:
+		// Channel is closed, create a new one
+		as.stopChan = make(chan struct{})
+	default:
+		// Channel is open, reuse it
+	}
+
 	as.running = true
 	as.log.Info("Starting auto ARP scanner")
 
@@ -52,7 +66,7 @@ func (as *AutoScanner) Start() {
 		as.cfg.RetryDelay,
 	)
 
-	go as.runLoop()
+	go as.runLoop(ctx)
 }
 
 func (as *AutoScanner) Stop() {
@@ -66,8 +80,14 @@ func (as *AutoScanner) Stop() {
 		return
 	}
 
-	as.log.Infof("Setting running to false and closing stopChan")
+	as.log.Infof("Setting running to false, closing stopChan, and cancelling context")
 	as.running = false
+
+	// Cancel the context to stop any ongoing scans
+	if as.cancelFunc != nil {
+		as.cancelFunc()
+	}
+
 	close(as.stopChan)
 	as.stopChan = make(chan struct{})
 	as.log.Info("Stopped auto ARP scanner successfully")
@@ -79,27 +99,42 @@ func (as *AutoScanner) IsRunning() bool {
 	return as.running
 }
 
-func (as *AutoScanner) runLoop() {
+func (as *AutoScanner) runLoop(ctx context.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			as.log.Errorf("Panic in runLoop: %v", r)
+		}
+	}()
+
 	ticker := time.NewTicker(as.cfg.AutoScanInterval)
 	defer ticker.Stop()
 
 	as.log.Infof("Auto scanner loop started with interval: %v", as.cfg.AutoScanInterval)
 
 	// Perform initial scan immediately
-	as.performScan()
+	as.performScan(ctx)
 
 	for {
 		select {
 		case <-ticker.C:
-			as.performScan()
+			as.performScan(ctx)
 		case <-as.stopChan:
 			as.log.Info("Auto scanner loop stopped")
+			return
+		case <-ctx.Done():
+			as.log.Info("Auto scanner loop stopped via context cancellation")
 			return
 		}
 	}
 }
 
-func (as *AutoScanner) performScan() {
+func (as *AutoScanner) performScan(ctx context.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			as.log.Errorf("Panic in performScan: %v", r)
+		}
+	}()
+
 	as.mu.Lock()
 	running := as.running
 	as.mu.Unlock()
@@ -111,8 +146,25 @@ func (as *AutoScanner) performScan() {
 
 	as.log.Info("Performing scheduled ARP scan")
 
-	ctx := context.Background()
+	// Check if context is cancelled before starting scan
+	select {
+	case <-ctx.Done():
+		as.log.Info("Context cancelled before scan, skipping scan")
+		return
+	default:
+	}
+
 	devices, err := as.scanner.Scan(ctx, as.cfg.AutoScanIPRange)
+
+	// Check again after scan in case stop was called during scan
+	as.mu.Lock()
+	wasRunning := as.running
+	as.mu.Unlock()
+
+	if !wasRunning {
+		as.log.Info("Auto scan was stopped during scan, discarding results")
+		return
+	}
 
 	if err != nil {
 		as.log.Errorf("Scheduled ARP scan failed: %v", err)

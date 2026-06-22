@@ -245,20 +245,39 @@ func (p *RPCScannerPublisher) parseResponse(body []byte) (*models.Response, erro
 	}
 
 	var arpResp models.ARPResponse
-	if err := json.Unmarshal(body, &arpResp); err == nil && arpResp.TaskID != "" && (len(arpResp.OnlineDevices) > 0 || len(arpResp.OfflineDevices) > 0) {
-		log.Printf("Received ARP response: TaskID=%s, Total=%d, Online=%d, Offline=%d",
-			arpResp.TaskID, arpResp.TotalCount, arpResp.OnlineCount, arpResp.OfflineCount)
+	if err := json.Unmarshal(body, &arpResp); err == nil && arpResp.TaskID != "" {
+		// Handle control command responses (started/stopped/failed)
+		if arpResp.Status == "started" || arpResp.Status == "stopped" || arpResp.Status == "failed" {
+			log.Printf("Received ARP control response: TaskID=%s, Status=%s", arpResp.TaskID, arpResp.Status)
 
-		response := &models.Response{
-			TaskID: arpResp.TaskID,
-			Result: arpResp,
+			response := &models.Response{
+				TaskID: arpResp.TaskID,
+				Result: arpResp,
+			}
+
+			if p.onResponse != nil {
+				p.onResponse(response)
+			}
+
+			return response, nil
 		}
 
-		if p.onResponse != nil {
-			p.onResponse(response)
-		}
+		// Handle regular scan responses
+		if len(arpResp.OnlineDevices) > 0 || len(arpResp.OfflineDevices) > 0 {
+			log.Printf("Received ARP response: TaskID=%s, Total=%d, Online=%d, Offline=%d",
+				arpResp.TaskID, arpResp.TotalCount, arpResp.OnlineCount, arpResp.OfflineCount)
 
-		return response, nil
+			response := &models.Response{
+				TaskID: arpResp.TaskID,
+				Result: arpResp,
+			}
+
+			if p.onResponse != nil {
+				p.onResponse(response)
+			}
+
+			return response, nil
+		}
 	}
 
 	var nmapTcpUdpResp models.NmapTcpUdpResponse

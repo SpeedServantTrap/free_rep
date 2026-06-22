@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Network, Copy, Check, Wifi, WifiOff, Play, Square } from 'lucide-react'
 import { useStore }         from '@/store'
 import { useSend }          from '@/hooks/useWebSocket'
@@ -8,6 +8,7 @@ const SERVICE = 'arp_service'
 
 export default function ARPScanner() {
   const [copied, setCopied] = useState(false)
+  const [pendingCommand, setPendingCommand] = useState(null) // 'start' or 'stop'
 
   const send                = useSend()
   const activeScan          = useStore((s) => s.activeScan)
@@ -21,21 +22,40 @@ export default function ARPScanner() {
   const result     = latestResult?.scanner_service === SERVICE ? latestResult : null
   const scanResult = result?.result
 
+  // Handle control command responses
+  useEffect(() => {
+    if (pendingCommand && result?.result?.status) {
+      const status = result.result.status
+      console.log('[ARPScanner] Received response for pending command:', pendingCommand, 'status:', status)
+
+      if (pendingCommand === 'start' && status === 'started') {
+        setAutoScanRunning(true)
+        setPendingCommand(null)
+      } else if (pendingCommand === 'stop' && status === 'stopped') {
+        setAutoScanRunning(false)
+        setPendingCommand(null)
+      } else if (status === 'failed') {
+        console.error('[ARPScanner] Command failed:', result.result.error)
+        setPendingCommand(null)
+      }
+    }
+  }, [result, pendingCommand, setAutoScanRunning])
+
   const handleStartAutoScan = useCallback(() => {
     console.log('[ARPScanner] Start button clicked, autoScanRunning:', autoScanRunning, 'isConnected:', isConnected)
-    if (!isConnected || autoScanRunning) return
+    if (!isConnected || autoScanRunning || pendingCommand) return
     console.log('[ARPScanner] Sending start command')
     send(SERVICE, { command: 'start' })
-    setAutoScanRunning(true)
-  }, [isConnected, autoScanRunning, send, setAutoScanRunning])
+    setPendingCommand('start')
+  }, [isConnected, autoScanRunning, pendingCommand, send])
 
   const handleStopAutoScan = useCallback(() => {
     console.log('[ARPScanner] Stop button clicked, autoScanRunning:', autoScanRunning, 'isConnected:', isConnected)
-    if (!isConnected || !autoScanRunning) return
+    if (!isConnected || !autoScanRunning || pendingCommand) return
     console.log('[ARPScanner] Sending stop command')
     send(SERVICE, { command: 'stop' })
-    setAutoScanRunning(false)
-  }, [isConnected, autoScanRunning, send, setAutoScanRunning])
+    setPendingCommand('stop')
+  }, [isConnected, autoScanRunning, pendingCommand, send])
 
   const copyJSON = () => {
     navigator.clipboard.writeText(JSON.stringify(scanResult, null, 2))
@@ -58,24 +78,25 @@ export default function ARPScanner() {
       <div style={{ display: 'grid', gap: 20 }}>
         <Card title="Auto Scan Control">
           <div style={{ marginTop: 16, display: 'flex', gap: 10, alignItems: 'center' }}>
-            <Button 
-              variant="primary" 
-              size="lg" 
-              loading={autoScanRunning} 
-              onClick={handleStartAutoScan} 
-              disabled={!isConnected || autoScanRunning}
+            <Button
+              variant="primary"
+              size="lg"
+              loading={pendingCommand === 'start'}
+              onClick={handleStartAutoScan}
+              disabled={!isConnected || autoScanRunning || pendingCommand !== null}
             >
               <Play size={16} style={{ marginRight: 8 }} />
-              {autoScanRunning ? 'Auto Scan Running…' : 'Start Auto Scan'}
+              {pendingCommand === 'start' ? 'Starting…' : autoScanRunning ? 'Auto Scan Running…' : 'Start Auto Scan'}
             </Button>
-            <Button 
-              variant="danger" 
-              size="lg" 
-              onClick={handleStopAutoScan} 
-              disabled={!isConnected || !autoScanRunning}
+            <Button
+              variant="danger"
+              size="lg"
+              loading={pendingCommand === 'stop'}
+              onClick={handleStopAutoScan}
+              disabled={!isConnected || !autoScanRunning || pendingCommand !== null}
             >
               <Square size={16} style={{ marginRight: 8 }} />
-              Stop Auto Scan
+              {pendingCommand === 'stop' ? 'Stopping…' : 'Stop Auto Scan'}
             </Button>
             <span className="text-muted text-sm">
               {isConnected ? 'Auto scan configured in scanner .env file' : 'Waiting for backend…'}
@@ -83,7 +104,7 @@ export default function ARPScanner() {
           </div>
         </Card>
 
-        {autoScanRunning && (
+        {(autoScanRunning || pendingCommand === 'start') && (
           <Card>
             <ScanAnimation label="Auto scan running… Results will appear when available." />
           </Card>
