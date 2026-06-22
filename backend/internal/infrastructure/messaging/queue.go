@@ -230,18 +230,37 @@ func (p *RPCScannerPublisher) SetResponseCallback(callback func(*models.Response
 
 func (p *RPCScannerPublisher) parseResponse(body []byte) (*models.Response, error) {
 	var icmpResp models.ICMPResponse
-	if err := json.Unmarshal(body, &icmpResp); err == nil && icmpResp.TaskID != "" && len(icmpResp.Results) > 0 {
-		log.Printf("Received ICMP response for task %s with %d results", icmpResp.TaskID, len(icmpResp.Results))
-		response := &models.Response{
-			TaskID: icmpResp.TaskID,
-			Result: icmpResp,
+	if err := json.Unmarshal(body, &icmpResp); err == nil && icmpResp.TaskID != "" {
+		// Handle control command responses (started/stopped/failed)
+		if icmpResp.Status == "started" || icmpResp.Status == "stopped" || icmpResp.Status == "failed" {
+			log.Printf("Received ICMP control response: TaskID=%s, Status=%s", icmpResp.TaskID, icmpResp.Status)
+
+			response := &models.Response{
+				TaskID: icmpResp.TaskID,
+				Result: icmpResp,
+			}
+
+			if p.onResponse != nil {
+				p.onResponse(response)
+			}
+
+			return response, nil
 		}
 
-		if p.onResponse != nil {
-			p.onResponse(response)
-		}
+		// Handle regular scan responses
+		if len(icmpResp.Results) > 0 {
+			log.Printf("Received ICMP response for task %s with %d results", icmpResp.TaskID, len(icmpResp.Results))
+			response := &models.Response{
+				TaskID: icmpResp.TaskID,
+				Result: icmpResp,
+			}
 
-		return response, nil
+			if p.onResponse != nil {
+				p.onResponse(response)
+			}
+
+			return response, nil
+		}
 	}
 
 	var arpResp models.ARPResponse

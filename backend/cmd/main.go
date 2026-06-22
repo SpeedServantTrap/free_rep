@@ -202,6 +202,42 @@ func main() {
 		log.Println("[ARP AutoScan] Delivery channel closed")
 	}()
 
+	// ── ICMP Auto Scan Results consumer ───────────────────────────────────────
+	// Consumes from the `icmp_auto_scan_results` queue (published by the ICMP scanner
+	// auto-scanner), processes results and saves to MongoDB.
+	go func() {
+		deliveries, err := publisher.ConsumeChangeEvents("icmp_auto_scan_results")
+		if err != nil {
+			log.Printf("[ICMP AutoScan] Failed to start consumer: %v", err)
+			return
+		}
+		log.Println("[ICMP AutoScan] Consumer started — waiting for auto scan results…")
+
+		for msg := range deliveries {
+			log.Printf("[ICMP AutoScan] Received auto scan result")
+			var icmpResp models.ICMPResponse
+			if err := json.Unmarshal(msg.Body, &icmpResp); err != nil {
+				log.Printf("[ICMP AutoScan] Cannot parse ICMP response: %v — body: %s", err, string(msg.Body))
+				msg.Nack(false, false) // dead-letter
+				continue
+			}
+
+			log.Printf("[ICMP AutoScan] Processing ICMP auto scan: TaskID=%s, Results=%d",
+				icmpResp.TaskID, len(icmpResp.Results))
+
+			// Process the ICMP response the same way as regular responses
+			response := &models.Response{
+				TaskID: icmpResp.TaskID,
+				Result: icmpResp,
+			}
+			app.ProcessResponse(response)
+
+			log.Printf("[ICMP AutoScan] Processed auto scan result: %s", icmpResp.TaskID)
+			msg.Ack(false)
+		}
+		log.Println("[ICMP AutoScan] Delivery channel closed")
+	}()
+
 	// Keep main goroutine alive
 	select {}
 }

@@ -174,6 +174,7 @@ func (c *Client) processICMPRequest(options any, taskID string) *models.Response
 	var icmpOpts struct {
 		Targets   []string `json:"targets"`
 		PingCount int      `json:"ping_count"`
+		Command   string   `json:"command,omitempty"`
 	}
 
 	if err := parseOptions(options, &icmpOpts); err != nil {
@@ -183,6 +184,20 @@ func (c *Client) processICMPRequest(options any, taskID string) *models.Response
 		}
 	}
 
+	// Handle auto-scan control commands
+	if icmpOpts.Command == "start" || icmpOpts.Command == "stop" {
+		log.Printf("ICMP auto scan command: %s", icmpOpts.Command)
+		icmpRequest := models.ICMPRequest{
+			TaskID:  taskID,
+			Command: icmpOpts.Command,
+		}
+		return c.app.ProcessRequest(&models.Request{
+			ScannerService: "icmp_service",
+			Options:        icmpRequest,
+		})
+	}
+
+	// Regular ICMP scan request
 	if len(icmpOpts.Targets) == 0 {
 		return &models.Response{
 			TaskID: taskID,

@@ -837,7 +837,7 @@ func (r *Repository) GetL3Device(ip string) (*models.L3DeviceNew, error) {
 
 	log.Printf("[GetL3Device] Searching for device with IP: '%s'", ip)
 	var device models.L3DeviceNew
-	err := r.db.ICMPCollection().FindOne(ctx, bson.M{"_id": ip}).Decode(&device)
+	err := r.db.L3DevicesCollection().FindOne(ctx, bson.M{"_id": ip}).Decode(&device)
 	if err != nil {
 		log.Printf("[GetL3Device] Device not found for IP: '%s', error: %v", ip, err)
 		return nil, err
@@ -852,7 +852,7 @@ func (r *Repository) GetAllL3Devices() ([]models.L3DeviceNew, error) {
 	defer cancel()
 
 	log.Printf("[GetAllL3Devices] Retrieving all L3 devices")
-	cursor, err := r.db.ICMPCollection().Find(ctx, bson.D{})
+	cursor, err := r.db.L3DevicesCollection().Find(ctx, bson.D{})
 	if err != nil {
 		log.Printf("[GetAllL3Devices] Error finding devices: %v", err)
 		return nil, err

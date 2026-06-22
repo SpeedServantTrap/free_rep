@@ -1,9 +1,9 @@
 import { create } from 'zustand'
 
 // Load auto scan state from localStorage
-const loadAutoScanState = () => {
+const loadAutoScanState = (key) => {
   try {
-    const saved = localStorage.getItem('arpAutoScanRunning')
+    const saved = localStorage.getItem(key)
     return saved === 'true'
   } catch {
     return false
@@ -17,7 +17,8 @@ export const useStore = create((set, get) => ({
   recentResults: [],
 
   // ── Auto scan state (persisted in localStorage) ───────────────────────────
-  arpAutoScanRunning: loadAutoScanState(),
+  arpAutoScanRunning: loadAutoScanState('arpAutoScanRunning'),
+  icmpAutoScanRunning: loadAutoScanState('icmpAutoScanRunning'),
 
   // ── Change Detection (populated by WS change_event messages) ─────────────
   changeEvents:     [],
@@ -53,6 +54,15 @@ export const useStore = create((set, get) => ({
       console.warn('Failed to save auto scan state to localStorage:', e)
     }
     set({ arpAutoScanRunning: running })
+  },
+
+  setIcmpAutoScanRunning: (running) => {
+    try {
+      localStorage.setItem('icmpAutoScanRunning', running)
+    } catch (e) {
+      console.warn('Failed to save auto scan state to localStorage:', e)
+    }
+    set({ icmpAutoScanRunning: running })
   },
 
   // ── Change event actions ──────────────────────────────────────────────────

@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react'
-import { Radio, Copy, Check, Plus, X } from 'lucide-react'
+import { useState, useCallback, useEffect } from 'react'
+import { Radio, Copy, Check, Play, Square } from 'lucide-react'
 import { useStore }         from '@/store'
 import { useSend }          from '@/hooks/useWebSocket'
 import { Button, Badge, Card, EmptyState, ScanAnimation } from '@/components/ui'
@@ -7,33 +7,53 @@ import { Button, Badge, Card, EmptyState, ScanAnimation } from '@/components/ui'
 const SERVICE = 'icmp_service'
 
 export default function ICMPScanner() {
-  const [targets,   setTargets]   = useState('192.168.1.1')
-  const [pingCount, setPingCount] = useState(4)
-  const [copied,    setCopied]    = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [pendingCommand, setPendingCommand] = useState(null) // 'start' or 'stop'
 
-  const send         = useSend()
-  const activeScan   = useStore((s) => s.activeScan)
-  const latestResult = useStore((s) => s.latestResult)
-  const wsStatus     = useStore((s) => s.wsStatus)
+  const send                = useSend()
+  const latestResult        = useStore((s) => s.latestResult)
+  const wsStatus            = useStore((s) => s.wsStatus)
+  const autoScanRunning     = useStore((s) => s.icmpAutoScanRunning)
+  const setAutoScanRunning  = useStore((s) => s.setIcmpAutoScanRunning)
 
-  const isScanning  = activeScan?.scanner_service === SERVICE
   const isConnected = wsStatus === 'connected'
   const result     = latestResult?.scanner_service === SERVICE ? latestResult : null
   const scanResult = result?.result
 
-  const parsedTargets = targets
-    .split(/[\n,]+/)
-    .map((t) => t.trim())
-    .filter(Boolean)
+  // Handle control command responses
+  useEffect(() => {
+    if (pendingCommand && result?.result?.status) {
+      const status = result.result.status
+      console.log('[ICMPScanner] Received response for pending command:', pendingCommand, 'status:', status)
 
-  const handleScan = useCallback(() => {
-    if (!parsedTargets.length || isScanning) return
-    send(SERVICE, { targets: parsedTargets, ping_count: Number(pingCount) })
-  }, [parsedTargets, pingCount, isScanning, send])
+      if (pendingCommand === 'start' && status === 'started') {
+        setAutoScanRunning(true)
+        setPendingCommand(null)
+      } else if (pendingCommand === 'stop' && status === 'stopped') {
+        setAutoScanRunning(false)
+        setPendingCommand(null)
+      } else if (status === 'failed') {
+        console.error('[ICMPScanner] Command failed:', result.result.error)
+        setPendingCommand(null)
+      }
+    }
+  }, [result, pendingCommand, setAutoScanRunning])
 
-  const handleKey = (e) => {
-    if (e.ctrlKey && e.key === 'Enter') handleScan()
-  }
+  const handleStartAutoScan = useCallback(() => {
+    console.log('[ICMPScanner] Start button clicked, autoScanRunning:', autoScanRunning, 'isConnected:', isConnected)
+    if (!isConnected || autoScanRunning || pendingCommand) return
+    console.log('[ICMPScanner] Sending start command')
+    send(SERVICE, { command: 'start' })
+    setPendingCommand('start')
+  }, [isConnected, autoScanRunning, pendingCommand, send])
+
+  const handleStopAutoScan = useCallback(() => {
+    console.log('[ICMPScanner] Stop button clicked, autoScanRunning:', autoScanRunning, 'isConnected:', isConnected)
+    if (!isConnected || !autoScanRunning || pendingCommand) return
+    console.log('[ICMPScanner] Sending stop command')
+    send(SERVICE, { command: 'stop' })
+    setPendingCommand('stop')
+  }, [isConnected, autoScanRunning, pendingCommand, send])
 
   const copyJSON = () => {
     navigator.clipboard.writeText(JSON.stringify(scanResult, null, 2))
@@ -48,66 +68,53 @@ export default function ICMPScanner() {
   }
 
   return (
-    <div onKeyDown={handleKey}>
+    <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title"><Radio size={22} /> ICMP Ping</h1>
-          <p className="page-subtitle">Ping multiple hosts simultaneously and measure packet loss</p>
+          <h1 className="page-title"><Radio size={22} /> ICMP Scanner</h1>
+          <p className="page-subtitle">Auto-scan configured in scanner .env file</p>
         </div>
       </div>
 
       <div style={{ display: 'grid', gap: 20 }}>
-        <Card title="Scan Configuration">
-          <div className="grid-2">
-            <div className="form-group">
-              <label>Targets (comma or newline separated)</label>
-              <textarea
-                rows={4}
-                value={targets}
-                onChange={(e) => setTargets(e.target.value)}
-                placeholder={'192.168.1.1\ngoogle.com\n8.8.8.8'}
-              />
-              <span className="text-muted text-xs" style={{ marginTop: 4 }}>
-                {parsedTargets.length} target{parsedTargets.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-            <div className="form-group">
-              <label>Ping Count</label>
-              <input
-                type="number"
-                min={1}
-                max={100}
-                value={pingCount}
-                onChange={(e) => setPingCount(e.target.value)}
-              />
-              <div className="text-muted text-xs" style={{ marginTop: 8 }}>
-                Packets per target: <strong>{pingCount}</strong>
-              </div>
-            </div>
-          </div>
+        <Card title="Auto Scan Control">
           <div style={{ marginTop: 16, display: 'flex', gap: 10, alignItems: 'center' }}>
             <Button
-              variant="primary" size="lg"
-              loading={isScanning}
-              onClick={handleScan}
-              disabled={!parsedTargets.length || !isConnected}
+              variant="primary"
+              size="lg"
+              loading={pendingCommand === 'start'}
+              onClick={handleStartAutoScan}
+              disabled={!isConnected || autoScanRunning || pendingCommand !== null}
             >
-              {isScanning ? 'Pinging…' : `Ping ${parsedTargets.length} Host${parsedTargets.length !== 1 ? 's' : ''}`}
+              <Play size={16} style={{ marginRight: 8 }} />
+              {pendingCommand === 'start' ? 'Starting…' : autoScanRunning ? 'Auto Scan Running…' : 'Start Auto Scan'}
             </Button>
-            <span className="text-muted text-sm">{isConnected ? 'Ctrl + Enter' : 'Waiting for backend…'}</span>
+            <Button
+              variant="danger"
+              size="lg"
+              loading={pendingCommand === 'stop'}
+              onClick={handleStopAutoScan}
+              disabled={!isConnected || !autoScanRunning || pendingCommand !== null}
+            >
+              <Square size={16} style={{ marginRight: 8 }} />
+              {pendingCommand === 'stop' ? 'Stopping…' : 'Stop Auto Scan'}
+            </Button>
+            <span className="text-muted text-sm">
+              {isConnected ? 'Auto scan configured in scanner .env file' : 'Waiting for backend…'}
+            </span>
           </div>
         </Card>
 
-        {isScanning && (
+        {(autoScanRunning || pendingCommand === 'start') && (
           <Card>
-            <ScanAnimation label={`Pinging ${parsedTargets.length} host${parsedTargets.length !== 1 ? 's' : ''}…`} />
+            <ScanAnimation label="Auto scan running… Results will appear when available." />
           </Card>
         )}
 
-        {scanResult && !isScanning && (
+        {scanResult && (
           <div className="result-panel animate-in">
             <div className="result-header">
-              <span className="result-title"><Radio size={14} /> Ping Results</span>
+              <span className="result-title"><Radio size={14} /> ICMP Scan Result</span>
               <div style={{ display: 'flex', gap: 8 }}>
                 <Badge>{scanResult.status ?? 'completed'}</Badge>
                 <button className="copy-btn" onClick={copyJSON}>

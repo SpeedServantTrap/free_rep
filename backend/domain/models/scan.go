@@ -40,6 +40,7 @@ type ICMPRequest struct {
 	TaskID    string   `json:"task_id"`
 	Targets   []string `json:"targets"`
 	PingCount int      `json:"ping_count"`
+	Command   string   `json:"command,omitempty"` // "start" or "stop" for auto-scan control
 }
 
 type ICMPResponse struct {

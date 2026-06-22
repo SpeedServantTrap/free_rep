@@ -16,6 +16,7 @@ type PingRequest struct {
 	TaskID    string   `json:"task_id"`
 	Targets   []string `json:"targets"`
 	PingCount int      `json:"ping_count"`
+	Command   string   `json:"command,omitempty"` // "start" or "stop" for auto-scan control
 }
 
 type PingResponse struct {
@@ -80,6 +81,10 @@ func (r *RabbitMQ) Close() error {
 		return r.conn.Close()
 	}
 	return nil
+}
+
+func (r *RabbitMQ) Channel() *amqp.Channel {
+	return r.channel
 }
 
 func (r *RabbitMQ) SendResponse(replyTo string, correlationID string, response interface{}) error {

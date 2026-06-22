@@ -83,6 +83,10 @@ func (d *Database) L2DevicesCollection() *mongo.Collection {
 // All IP-based scan types share one collection.
 // Each document carries a "scan_type" discriminator field.
 
+func (d *Database) L3DevicesCollection() *mongo.Collection {
+	return d.Database.Collection("l3_devices")
+}
+
 func (d *Database) ICMPCollection() *mongo.Collection {
 	return d.Database.Collection("l3_devices")
 }
