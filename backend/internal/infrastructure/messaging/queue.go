@@ -214,7 +214,6 @@ func (p *RPCScannerPublisher) startReplyConsumer() error {
 				response, err := p.parseResponse(msg.Body)
 				if err != nil {
 					log.Printf("Failed to parse response: %v", err)
-					log.Printf("Response body: %s", string(msg.Body))
 					continue
 				}
 				replyChan <- response
@@ -230,8 +229,6 @@ func (p *RPCScannerPublisher) SetResponseCallback(callback func(*models.Response
 }
 
 func (p *RPCScannerPublisher) parseResponse(body []byte) (*models.Response, error) {
-	log.Printf("Raw response body: %s", string(body))
-
 	var icmpResp models.ICMPResponse
 	if err := json.Unmarshal(body, &icmpResp); err == nil && icmpResp.TaskID != "" && len(icmpResp.Results) > 0 {
 		log.Printf("Received ICMP response for task %s with %d results", icmpResp.TaskID, len(icmpResp.Results))
@@ -249,9 +246,9 @@ func (p *RPCScannerPublisher) parseResponse(body []byte) (*models.Response, erro
 
 	var arpResp models.ARPResponse
 	if err := json.Unmarshal(body, &arpResp); err == nil && arpResp.TaskID != "" && (len(arpResp.OnlineDevices) > 0 || len(arpResp.OfflineDevices) > 0) {
-		log.Printf("Received ARP response for task %s: Total=%d, Online=%d, Offline=%d",
+		log.Printf("Received ARP response: TaskID=%s, Total=%d, Online=%d, Offline=%d",
 			arpResp.TaskID, arpResp.TotalCount, arpResp.OnlineCount, arpResp.OfflineCount)
-		log.Printf("ARP response details: Status=%s, Error=%s", arpResp.Status, arpResp.Error)
+
 		response := &models.Response{
 			TaskID: arpResp.TaskID,
 			Result: arpResp,
@@ -338,6 +335,7 @@ func (p *RPCScannerPublisher) parseResponse(body []byte) (*models.Response, erro
 		return &response, nil
 	}
 
+	log.Printf("Unable to parse response as any known type")
 	return nil, fmt.Errorf("unable to parse response as any known type")
 }
 

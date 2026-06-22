@@ -120,15 +120,31 @@ func (c *Client) processARPRequest(options any, taskID string) *models.Response 
 	var arpOpts struct {
 		InterfaceName string `json:"interface_name"`
 		IPRange       string `json:"ip_range"`
+		Command       string `json:"command,omitempty"`
 	}
 
 	if err := parseOptions(options, &arpOpts); err != nil {
+		log.Printf("Failed to parse ARP options: %v", err)
 		return &models.Response{
 			TaskID: taskID,
 			Result: map[string]string{"error": "invalid ARP options: " + err.Error()},
 		}
 	}
 
+	// Handle auto-scan control commands
+	if arpOpts.Command == "start" || arpOpts.Command == "stop" {
+		log.Printf("ARP auto scan command: %s", arpOpts.Command)
+		arpRequest := models.ARPRequest{
+			TaskID:  taskID,
+			Command: arpOpts.Command,
+		}
+		return c.app.ProcessRequest(&models.Request{
+			ScannerService: "arp_service",
+			Options:        arpRequest,
+		})
+	}
+
+	// Regular ARP scan request
 	if arpOpts.InterfaceName == "" {
 		return &models.Response{
 			TaskID: taskID,

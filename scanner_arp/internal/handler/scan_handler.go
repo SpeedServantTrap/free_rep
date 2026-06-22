@@ -8,10 +8,47 @@ import (
 	"encoding/json"
 )
 
+// AutoScannerInterface defines the interface for auto scanner control
+type AutoScannerInterface interface {
+	Start()
+	Stop()
+	IsRunning() bool
+}
+
+// AutoScannerInstance is a global reference to the auto scanner instance
+var AutoScannerInstance AutoScannerInterface
+
+func SetAutoScannerInstance(autoScanner AutoScannerInterface) {
+	AutoScannerInstance = autoScanner
+}
+
 func HandleMessage(ctx context.Context, msg queue.Delivery, rabbitMQ *queue.RabbitMQ, log logger.Logger) {
 	var req queue.ARPRequest
 	if err := json.Unmarshal(msg.Body, &req); err != nil {
 		log.Errorf("Failed to unmarshal ARP scan request: %v", err)
+		return
+	}
+
+	// Handle auto-scan control commands
+	if req.Command == "start" {
+		log.Infof("Received start command for auto scanner")
+		if AutoScannerInstance != nil {
+			AutoScannerInstance.Start()
+		} else {
+			log.Error("Auto scanner instance is not set")
+		}
+		return
+	}
+
+	if req.Command == "stop" {
+		log.Infof("=== RECEIVED STOP COMMAND FOR AUTO SCANNER ===")
+		if AutoScannerInstance != nil {
+			log.Infof("Auto scanner instance found, calling Stop()")
+			AutoScannerInstance.Stop()
+			log.Infof("Stop() called successfully")
+		} else {
+			log.Error("Auto scanner instance is not set")
+		}
 		return
 	}
 

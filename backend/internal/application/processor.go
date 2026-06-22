@@ -49,6 +49,7 @@ func (a *App) ProcessRequest(req *models.Request) *models.Response {
 
 		case "arp_service":
 			if arpReq, ok := response.Result.(models.ARPRequest); ok {
+				log.Printf("Processing ARP request: TaskID=%s, Command=%s", arpReq.TaskID, arpReq.Command)
 				a.historyService.CacheRequest(arpReq.TaskID, arpReq)
 				return a.publisherService.PublishARPRequest(arpReq)
 			}

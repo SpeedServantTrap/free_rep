@@ -16,6 +16,7 @@ type ARPRequest struct {
 	TaskID        string `json:"task_id"`
 	InterfaceName string `json:"interface_name"`
 	IPRange       string `json:"ip_range"`
+	Command       string `json:"command,omitempty"` // "start" or "stop" for auto-scan control
 }
 
 type ARPResponse struct {
@@ -46,6 +47,10 @@ type RabbitMQ struct {
 	channel *amqp.Channel
 	queue   amqp.Queue
 	config  RabbitMQConfig
+}
+
+func (r *RabbitMQ) Channel() *amqp.Channel {
+	return r.channel
 }
 
 func NewRabbitMQ(config RabbitMQConfig) (*RabbitMQ, error) {

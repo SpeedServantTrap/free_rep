@@ -97,10 +97,15 @@ func (hs *HistoryService) GetRepo() RepositoryInterface {
 }
 
 func (hs *HistoryService) SaveARPResponse(result models.ARPResponse) {
+	log.Printf("Processing ARP response: TaskID=%s, Total=%d, Online=%d, Offline=%d",
+		result.TaskID, result.TotalCount, result.OnlineCount, result.OfflineCount)
+
 	if hs.repo == nil {
 		return
 	}
+
 	hs.ProcessARPToL2Devices(result)
+	hs.LinkARPToL3Devices(result)
 	hs.RemoveCachedRequest(result.TaskID)
 }
 
@@ -329,27 +334,33 @@ func (hs *HistoryService) ProcessTCPToL3Devices(result models.TCPResponse) {
 // ProcessARPToL2Devices processes ARP response and saves to L2 devices in new format
 func (hs *HistoryService) ProcessARPToL2Devices(result models.ARPResponse) {
 	if hs.repo == nil {
+		log.Printf("ERROR: Repository is nil in ProcessARPToL2Devices")
 		return
 	}
 
 	scanTime := time.Now().Format(time.RFC3339)
+	log.Printf("Processing ARP scan: Total devices=%d", len(result.Devices))
+
+	savedCount := 0
+	skippedCount := 0
 
 	// Only process online devices with valid MAC and IP addresses to prevent database pollution
 	for _, device := range result.Devices {
 		// Skip offline devices
 		if device.Status != "online" {
+			skippedCount++
 			continue
 		}
 
 		// Skip if MAC is empty or invalid format
 		if device.MAC == "" || !isValidMACAddress(device.MAC) {
-			log.Printf("Skipping device with invalid or empty MAC: %s", device.MAC)
+			skippedCount++
 			continue
 		}
 
 		// Skip if IP is empty or invalid format
 		if device.IP == "" || !isValidIPAddress(device.IP) {
-			log.Printf("Skipping device %s with invalid or empty IP: %s", device.MAC, device.IP)
+			skippedCount++
 			continue
 		}
 
@@ -364,9 +375,11 @@ func (hs *HistoryService) ProcessARPToL2Devices(result models.ARPResponse) {
 		if err := hs.repo.SaveOrUpdateL2Device(l2Device); err != nil {
 			log.Printf("Failed to save L2 device from ARP response: %v", err)
 		} else {
-			log.Printf("Successfully saved L2 device: MAC=%s, IP=%s", device.MAC, device.IP)
+			savedCount++
 		}
 	}
+
+	log.Printf("ARP scan processed: Saved=%d, Skipped=%d", savedCount, skippedCount)
 }
 
 // isValidMACAddress checks if the MAC address has a valid format

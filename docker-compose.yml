@@ -163,6 +163,8 @@ services:
       context: ./scanner_arp
       dockerfile: Dockerfile
     container_name: scanner-arp
+    env_file:
+      - ./scanner_arp/.env
     environment:
       RABBITMQ_URL: amqp://guest:guest@localhost:5672/
       SCANNER_NAME: arp_service

@@ -166,6 +166,42 @@ func main() {
 		log.Println("[ChangeEvents] Delivery channel closed")
 	}()
 
+	// ── ARP Auto Scan Results consumer ────────────────────────────────────────
+	// Consumes from the `arp_auto_scan_results` queue (published by the ARP scanner
+	// auto-scanner), processes results and saves to MongoDB.
+	go func() {
+		deliveries, err := publisher.ConsumeChangeEvents("arp_auto_scan_results")
+		if err != nil {
+			log.Printf("[ARP AutoScan] Failed to start consumer: %v", err)
+			return
+		}
+		log.Println("[ARP AutoScan] Consumer started — waiting for auto scan results…")
+
+		for msg := range deliveries {
+			log.Printf("[ARP AutoScan] Received auto scan result")
+			var arpResp models.ARPResponse
+			if err := json.Unmarshal(msg.Body, &arpResp); err != nil {
+				log.Printf("[ARP AutoScan] Cannot parse ARP response: %v — body: %s", err, string(msg.Body))
+				msg.Nack(false, false) // dead-letter
+				continue
+			}
+
+			log.Printf("[ARP AutoScan] Processing ARP auto scan: TaskID=%s, Total=%d, Online=%d",
+				arpResp.TaskID, arpResp.TotalCount, arpResp.OnlineCount)
+
+			// Process the ARP response the same way as regular responses
+			response := &models.Response{
+				TaskID: arpResp.TaskID,
+				Result: arpResp,
+			}
+			app.ProcessResponse(response)
+
+			log.Printf("[ARP AutoScan] Processed auto scan result: %s", arpResp.TaskID)
+			msg.Ack(false)
+		}
+		log.Println("[ARP AutoScan] Delivery channel closed")
+	}()
+
 	// Keep main goroutine alive
 	select {}
 }

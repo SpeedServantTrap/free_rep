@@ -1,10 +1,23 @@
 import { create } from 'zustand'
 
+// Load auto scan state from localStorage
+const loadAutoScanState = () => {
+  try {
+    const saved = localStorage.getItem('arpAutoScanRunning')
+    return saved === 'true'
+  } catch {
+    return false
+  }
+}
+
 export const useStore = create((set, get) => ({
   wsStatus:      'disconnected',
   activeScan:    null,
   latestResult:  null,
   recentResults: [],
+
+  // ── Auto scan state (persisted in localStorage) ───────────────────────────
+  arpAutoScanRunning: loadAutoScanState(),
 
   // ── Change Detection (populated by WS change_event messages) ─────────────
   changeEvents:     [],
@@ -31,6 +44,16 @@ export const useStore = create((set, get) => ({
   },
 
   clearRecent: () => set({ recentResults: [] }),
+
+  // ── Auto scan actions ─────────────────────────────────────────────────────
+  setArpAutoScanRunning: (running) => {
+    try {
+      localStorage.setItem('arpAutoScanRunning', running)
+    } catch (e) {
+      console.warn('Failed to save auto scan state to localStorage:', e)
+    }
+    set({ arpAutoScanRunning: running })
+  },
 
   // ── Change event actions ──────────────────────────────────────────────────
   addChangeEvent: (event) =>

@@ -655,19 +655,15 @@ func (r *Repository) SaveOrUpdateL2Device(device *models.L2DeviceNew) error {
 
 		_, err = r.db.L2DevicesCollection().UpdateOne(ctx, bson.M{"_id": device.ID}, update)
 		if err != nil {
-			log.Printf("Error updating L2 device: %v", err)
 			return err
 		}
-		log.Printf("L2 device updated successfully: %s", device.ID)
 	} else {
 		// Device doesn't exist, insert new one
 		device.FirstSeen = now
 		_, err = r.db.L2DevicesCollection().InsertOne(ctx, device)
 		if err != nil {
-			log.Printf("Error inserting L2 device: %v", err)
 			return err
 		}
-		log.Printf("L2 device inserted successfully: %s", device.ID)
 	}
 
 	return nil

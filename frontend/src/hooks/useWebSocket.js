@@ -49,6 +49,7 @@ export function useSend() {
       return
     }
     try {
+      console.log('[useSend] Sending request:', { scanner_service, options })
       wsClient.send({ type: 'scan', request: { scanner_service, options } })
       startScan(scanner_service, options)
     } catch (err) {
