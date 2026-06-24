@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   Wifi, LayoutDashboard, Network, Radio,
-  Shield, Terminal, Clock, Search, Bell,
+  Shield, Clock, Search, Bell,
 } from 'lucide-react'
 import { useStore }  from '@/store'
 import { StatusDot } from '@/components/ui'
@@ -10,7 +10,6 @@ const SCANNERS = [
   { to: '/arp',  label: 'ARP Scanner',  Icon: Network,   color: 'var(--green)'  },
   { to: '/icmp', label: 'ICMP Ping',    Icon: Radio,     color: 'var(--blue)'   },
   { to: '/nmap', label: 'Nmap Scanner', Icon: Shield,    color: 'var(--purple)' },
-  { to: '/tcp',  label: 'TCP Banner',   Icon: Terminal,  color: 'var(--yellow)' },
 ]
 
 const TOOLS = [

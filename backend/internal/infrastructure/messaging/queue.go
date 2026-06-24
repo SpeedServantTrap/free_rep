@@ -299,21 +299,6 @@ func (p *RPCScannerPublisher) parseResponse(body []byte) (*models.Response, erro
 		}
 	}
 
-	var nmapTcpUdpResp models.NmapTcpUdpResponse
-	if err := json.Unmarshal(body, &nmapTcpUdpResp); err == nil && nmapTcpUdpResp.TaskID != "" {
-		log.Printf("Received Nmap TCP/UDP response for task %s", nmapTcpUdpResp.TaskID)
-		response := &models.Response{
-			TaskID: nmapTcpUdpResp.TaskID,
-			Result: nmapTcpUdpResp,
-		}
-
-		if p.onResponse != nil {
-			p.onResponse(response)
-		}
-
-		return response, nil
-	}
-
 	var nmapOsResp models.NmapOsDetectionResponse
 	if err := json.Unmarshal(body, &nmapOsResp); err == nil && nmapOsResp.TaskID != "" && (nmapOsResp.Name != "" || nmapOsResp.Vendor != "" || nmapOsResp.Family != "") {
 		log.Printf("Received Nmap OS detection response for task %s", nmapOsResp.TaskID)
@@ -338,6 +323,21 @@ func (p *RPCScannerPublisher) parseResponse(body []byte) (*models.Response, erro
 		response := &models.Response{
 			TaskID: tcpResp.TaskID,
 			Result: tcpResp,
+		}
+
+		if p.onResponse != nil {
+			p.onResponse(response)
+		}
+
+		return response, nil
+	}
+
+	var nmapTcpUdpResp models.NmapTcpUdpResponse
+	if err := json.Unmarshal(body, &nmapTcpUdpResp); err == nil && nmapTcpUdpResp.TaskID != "" && (len(nmapTcpUdpResp.PortInfo) > 0 || nmapTcpUdpResp.Status == "failed") {
+		log.Printf("Received Nmap TCP/UDP response for task %s", nmapTcpUdpResp.TaskID)
+		response := &models.Response{
+			TaskID: nmapTcpUdpResp.TaskID,
+			Result: nmapTcpUdpResp,
 		}
 
 		if p.onResponse != nil {

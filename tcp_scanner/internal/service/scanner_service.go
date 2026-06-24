@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"regexp"
 	"time"
 
 	"test_tcp/internal/config"
@@ -80,9 +81,13 @@ func (s *Service) handle(ctx context.Context, d queue.Delivery) {
 	hexData, decoded, readErr := s.readTCP(ctx, req.Host, req.Port)
 	var objKey string
 	if readErr == nil {
-		objKey = fmt.Sprintf("%s_%d.hex", req.TaskID, time.Now().UnixNano())
-		reader := strings.NewReader(bytesToHexLine(hexData))
-		_, err := s.mio.PutObject(ctx, s.cfg.MinIOBucket, objKey, reader, int64(reader.Len()), minio.PutObjectOptions{ContentType: "text/plain"})
+		objKey = fmt.Sprintf("tcp/%s/%s/%d.txt", sanitizeObjectPart(req.Host), sanitizeObjectPart(req.Port), time.Now().UnixNano())
+		payload := decoded
+		if payload == "" {
+			payload = humanString(hexData)
+		}
+		reader := strings.NewReader(payload)
+		_, err := s.mio.PutObject(ctx, s.cfg.MinIOBucket, objKey, reader, int64(reader.Len()), minio.PutObjectOptions{ContentType: "text/plain; charset=utf-8"})
 		if err != nil {
 			s.log.Errorf("minio put: %v", err)
 		}
@@ -156,4 +161,17 @@ func humanString(b []byte) string {
 		}
 	}
 	return string(out)
+}
+
+func sanitizeObjectPart(v string) string {
+	v = strings.TrimSpace(strings.ToLower(v))
+	if v == "" {
+		return "unknown"
+	}
+	re := regexp.MustCompile(`[^a-z0-9._-]+`)
+	v = re.ReplaceAllString(v, "_")
+	if v == "" {
+		return "unknown"
+	}
+	return v
 }

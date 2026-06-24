@@ -389,18 +389,23 @@ func (h *HistoryHandler) GetTCPHistory(w http.ResponseWriter, r *http.Request) {
 	// Convert L3 devices to TCP history format
 	var records []models.TCPHistoryRecord
 	for _, device := range l3Devices {
-		// Only include devices that have TCP scanner type and banner data
-		if hasScannerType(device.ScannerTypes, "tcp") && device.TCPBanner != "" && device.TCPBanner != "-" {
-			record := models.TCPHistoryRecord{
-				ID:          primitive.NewObjectID(),
-				ScanType:    "tcp",
-				Host:        device.ID,
-				Port:        "unknown", // L3 doesn't store specific port info
-				DecodedText: device.TCPBanner,
-				Status:      "completed",
-				CreatedAt:   device.LastSeen,
+		// Only include devices that have TCP scanner type and per-port banner data
+		if hasScannerType(device.ScannerTypes, "tcp") && len(device.TCPBanners) > 0 {
+			for port, banner := range device.TCPBanners {
+				if port == "" || banner == "" {
+					continue
+				}
+				record := models.TCPHistoryRecord{
+					ID:          primitive.NewObjectID(),
+					ScanType:    "tcp",
+					Host:        device.ID,
+					Port:        port,
+					DecodedText: banner,
+					Status:      "completed",
+					CreatedAt:   device.LastSeen,
+				}
+				records = append(records, record)
 			}
-			records = append(records, record)
 		}
 	}
 

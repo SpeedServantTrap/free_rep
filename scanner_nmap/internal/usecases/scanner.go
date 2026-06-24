@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"scanner_nmap/internal/domain"
 	"scanner_nmap/internal/usecases/nmap_wrapper"
-	"strings"
-	"sync"
 
 	"github.com/Ullaakut/nmap/v3"
 )
@@ -22,56 +20,11 @@ func UdpTcpScanner(ctx context.Context, request domain.ScanTcpUdpRequest) (respo
 	fmt.Printf("Starting %s scan for %s on ports %s\n", scanType, request.IP, request.Ports)
 
 	if request.ScannerType == "UDP" || request.ScannerType == "udp_scan" {
-		if isFullPortRange(request.Ports) {
-			udpPortChunks := []string{
-				"1-8192",
-				"8193-16384",
-				"16385-24576",
-				"24577-32768",
-				"32769-40960",
-				"40961-49152",
-				"49153-57344",
-				"57345-65535",
-			}
-			fmt.Printf("UDP full-range scan detected; running %d chunks in parallel\n", len(udpPortChunks))
-
-			type chunkResult struct {
-				run *nmap.Run
-				err error
-			}
-
-			results := make([]chunkResult, len(udpPortChunks))
-			var wg sync.WaitGroup
-			for i, chunk := range udpPortChunks {
-				wg.Add(1)
-				go func(idx int, portChunk string) {
-					defer wg.Done()
-					run, scanErr := nmap_wrapper.UDPScan(ctx, request.IP, portChunk)
-					results[idx] = chunkResult{run: run, err: scanErr}
-				}(i, chunk)
-			}
-			wg.Wait()
-
-			for i, r := range results {
-				if r.err != nil {
-					fmt.Printf("UDP chunk %s failed: %v\n", udpPortChunks[i], r.err)
-					continue
-				}
-				if r.run != nil {
-					scanResults = append(scanResults, r.run)
-				}
-			}
-
-			if len(scanResults) == 0 {
-				return domain.ScanTcpUdpResponse{}, fmt.Errorf("all UDP chunks failed")
-			}
-		} else {
-			scanResult, scanErr := nmap_wrapper.UDPScan(ctx, request.IP, request.Ports)
-			if scanErr != nil {
-				err = scanErr
-			} else if scanResult != nil {
-				scanResults = append(scanResults, scanResult)
-			}
+		scanResult, scanErr := nmap_wrapper.UDPScan(ctx, request.IP, request.Ports)
+		if scanErr != nil {
+			err = scanErr
+		} else if scanResult != nil {
+			scanResults = append(scanResults, scanResult)
 		}
 	} else {
 		scanResult, scanErr := nmap_wrapper.TCPScan(ctx, request.IP, request.Ports)
@@ -167,11 +120,6 @@ func UdpTcpScanner(ctx context.Context, request domain.ScanTcpUdpRequest) (respo
 	}
 
 	return responseResult, err
-}
-
-func isFullPortRange(ports string) bool {
-	normalized := strings.ReplaceAll(strings.TrimSpace(ports), " ", "")
-	return normalized == "1-65535" || normalized == "0-65535"
 }
 
 func OSDetectionScanner(ctx context.Context, request domain.OsDetectionRequest) (response domain.OsDetectionResponse, err error) {

@@ -380,7 +380,8 @@ function L2DeviceCard({ device, onFillQuery }) {
 function L3DeviceCard({ device, onFillQuery }) {
   const hasPorts = (device.tcp_open_ports?.length > 0) || (device.udp_open_ports?.length > 0)
   const hasPackets = device.packets_reached?.length > 0
-  const hasBanner = device.tcp_banner && device.tcp_banner !== '-'
+  const bannerEntries = Object.entries(device.tcp_banners ?? {}).filter(([port, banner]) => port && banner)
+  const hasBannerByPort = bannerEntries.length > 0
   const hasScanTimes = device.scan_times?.length > 0
   const hasScanners = device.scanner_types?.length > 0
   const [showAllScanTimes, setShowAllScanTimes] = useState(false)
@@ -507,25 +508,35 @@ function L3DeviceCard({ device, onFillQuery }) {
       )}
 
       {/* TCP Banner Section */}
-      {hasBanner && (
+      {hasBannerByPort && (
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: '#fde047', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <Server size={20} />
-            TCP Banner
+            TCP Banners by Port
           </div>
-          <pre style={{
-            fontSize: 13,
-            color: '#fef08a',
-            margin: 0,
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            padding: 12,
-            background: 'rgba(234, 179, 8, 0.2)',
-            borderRadius: 6,
-            border: '1px solid rgba(234, 179, 8, 0.4)'
-          }}>
-            {device.tcp_banner}
-          </pre>
+          <div style={{ display: 'grid', gap: 10 }}>
+            {bannerEntries.map(([port, banner]) => (
+              <div key={port} style={{
+                padding: 12,
+                background: 'rgba(234, 179, 8, 0.2)',
+                borderRadius: 6,
+                border: '1px solid rgba(234, 179, 8, 0.4)'
+              }}>
+                <div style={{ fontSize: 12, color: '#fde68a', marginBottom: 6, fontFamily: 'monospace', fontWeight: 700 }}>
+                  Port {port}
+                </div>
+                <pre style={{
+                  fontSize: 13,
+                  color: '#fef08a',
+                  margin: 0,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                }}>
+                  {banner}
+                </pre>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

@@ -3,8 +3,10 @@ package application
 import (
 	"backend/domain/models"
 	"backend/internal/application/services"
+	"fmt"
 	"log"
 	rabbitmq "backend/internal/infrastructure/messaging"
+	"time"
 )
 
 type App struct {
@@ -20,16 +22,18 @@ func NewApp(publisher *rabbitmq.RPCScannerPublisher, repo services.RepositoryInt
 	responseService := services.NewResponseService(historyService)
 	publisherService := services.NewPublisherService(publisher)
 
-	publisherService.SetResponseCallback(func(response *models.Response) {
-		responseService.ProcessResponse(response)
-	})
-
-	return &App{
+	app := &App{
 		requestService:   requestService,
 		responseService:  responseService,
 		publisherService: publisherService,
 		historyService:   historyService,
 	}
+
+	publisherService.SetResponseCallback(func(response *models.Response) {
+		app.ProcessResponse(response)
+	})
+
+	return app
 }
 
 func (a *App) ProcessRequest(req *models.Request) *models.Response {
@@ -72,7 +76,93 @@ func (a *App) ProcessRequest(req *models.Request) *models.Response {
 }
 
 func (a *App) ProcessResponse(response *models.Response) {
+	if response == nil {
+		a.responseService.ProcessResponse(response)
+		return
+	}
+
+	nmapResp, ok := response.Result.(models.NmapTcpUdpResponse)
+	if !ok {
+		a.responseService.ProcessResponse(response)
+		return
+	}
+
 	a.responseService.ProcessResponse(response)
+
+	go a.triggerTCPBannerScansFromNmap(nmapResp.Host, nmapResp.TaskID, extractOpenTCPPorts(nmapResp))
+}
+
+func (a *App) triggerTCPBannerScansFromNmap(host, sourceTaskID string, ports []string) {
+	if host == "" {
+		log.Printf("[Auto-TCP] Skip: empty host for Nmap task %s", sourceTaskID)
+		return
+	}
+
+	if len(ports) == 0 {
+		log.Printf("[Auto-TCP] No open TCP ports for host %s (task %s)", host, sourceTaskID)
+		return
+	}
+
+	log.Printf("[Auto-TCP] Triggering TCP banner scans for host %s, ports=%v (source task=%s)", host, ports, sourceTaskID)
+
+	for _, port := range ports {
+		taskID := fmt.Sprintf("%s-tcp-banner-%s-%d", sourceTaskID, port, time.Now().UnixNano())
+		tcpReq := models.TCPRequest{
+			TaskID: taskID,
+			Host:   host,
+			Port:   port,
+		}
+
+		a.historyService.CacheRequest(taskID, tcpReq)
+		resp := a.publisherService.PublishTCPRequest(tcpReq)
+		if resp == nil {
+			log.Printf("[Auto-TCP] Empty response for %s:%s (task %s)", host, port, taskID)
+			continue
+		}
+
+		if errMap, ok := resp.Result.(map[string]string); ok {
+			if errMsg, hasErr := errMap["error"]; hasErr && errMsg != "" {
+				log.Printf("[Auto-TCP] Failed %s:%s (task %s): %s", host, port, taskID, errMsg)
+				continue
+			}
+		}
+
+		log.Printf("[Auto-TCP] Completed %s:%s (task %s)", host, port, taskID)
+	}
+}
+func extractOpenTCPPorts(result models.NmapTcpUdpResponse) []string {
+	seen := map[string]struct{}{}
+	ports := make([]string, 0)
+
+	for _, info := range result.PortInfo {
+		for i, p := range info.AllPorts {
+			protocol := ""
+			state := ""
+
+			if i < len(info.Protocols) {
+				protocol = info.Protocols[i]
+			}
+			if i < len(info.State) {
+				state = info.State[i]
+			}
+
+			if protocol != "tcp" {
+				continue
+			}
+			if state != "open" && state != "open|filtered" {
+				continue
+			}
+
+			port := fmt.Sprintf("%d", p)
+			if _, exists := seen[port]; exists {
+				continue
+			}
+			seen[port] = struct{}{}
+			ports = append(ports, port)
+		}
+	}
+
+	return ports
 }
 
 func (a *App) PublishNmapRequest(req interface{}) *models.Response {

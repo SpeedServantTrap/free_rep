@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Network, Radio, Shield, Terminal, Clock, Activity, Zap } from 'lucide-react'
+import { Network, Radio, Shield, Clock, Activity, Zap } from 'lucide-react'
 import { useStore } from '@/store'
 import { StatusDot, Badge, Button } from '@/components/ui'
 import { formatDistanceToNow } from 'date-fns'
@@ -8,7 +8,6 @@ const SCANNER_TILES = [
   { to: '/arp',  label: 'ARP Scanner',  Icon: Network,  color: 'green',  desc: 'Discover LAN devices via ARP' },
   { to: '/icmp', label: 'ICMP Ping',    Icon: Radio,    color: 'blue',   desc: 'Ping hosts and measure loss'  },
   { to: '/nmap', label: 'Nmap Scanner', Icon: Shield,   color: 'purple', desc: 'Port scan, OS detection'      },
-  { to: '/tcp',  label: 'TCP Banner',   Icon: Terminal, color: 'yellow', desc: 'Grab service banners'         },
 ]
 
 const svcLabel = {

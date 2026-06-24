@@ -54,7 +54,7 @@ type L3DeviceNew struct {
 	OS             string    `bson:"os" json:"os"`                               // OS detection result or "-"
 	DNS            string    `bson:"dns" json:"dns"`                              // DNS result or "-"
 	PacketsReached []string  `bson:"packets_reached" json:"packets_reached"`     // Comma-separated packets reached (ICMP)
-	TCPBanner      string    `bson:"tcp_banner" json:"tcp_banner"`               // TCP banner or "-"
+	TCPBanners     map[string]string `bson:"tcp_banners,omitempty" json:"tcp_banners,omitempty"` // port -> banner
 	ScannerTypes   []string  `bson:"scanner_types" json:"scanner_types"`        // Comma-separated scanner types (4 types: arp, nmap, icmp, tcp)
 	FirstSeen      time.Time `bson:"first_seen" json:"first_seen"`
 	LastSeen       time.Time `bson:"last_seen" json:"last_seen"`

@@ -261,6 +261,12 @@ func (hs *HistoryService) SaveTCPResponse(result models.TCPResponse) {
 			port = tcpReq.Port
 		}
 	}
+	if host == "" {
+		host = result.Host
+	}
+	if port == "" {
+		port = result.Port
+	}
 
 	historyRecord := &models.TCPHistoryRecord{
 		TaskID:       result.TaskID,
@@ -281,9 +287,13 @@ func (hs *HistoryService) SaveTCPResponse(result models.TCPResponse) {
 
 	// Also save to L3 device in new format
 	if result.Status == "completed" && host != "" {
+		portBanners := map[string]string{}
+		if port != "" {
+			portBanners[port] = result.DecodedText
+		}
 		l3Device := &models.L3DeviceNew{
 			ID:            host,
-			TCPBanner:     result.DecodedText,
+			TCPBanners:    portBanners,
 			ScannerTypes:  []string{"tcp"},
 		}
 		if err := hs.repo.SaveOrUpdateL3Device(l3Device); err != nil {
@@ -298,20 +308,32 @@ func (hs *HistoryService) ProcessTCPToL3Devices(result models.TCPResponse) {
 		return
 	}
 
-	var host string
+	var host, port string
 	if cachedReq := hs.GetCachedRequest(result.TaskID); cachedReq != nil {
 		if tcpReq, ok := cachedReq.(models.TCPRequest); ok {
 			host = tcpReq.Host
+			port = tcpReq.Port
 		}
+	}
+	if host == "" {
+		host = result.Host
+	}
+	if port == "" {
+		port = result.Port
 	}
 
 	if result.Status != "completed" || host == "" {
 		return
 	}
 
+	portBanners := map[string]string{}
+	if port != "" {
+		portBanners[port] = result.DecodedText
+	}
+
 	l3Device := &models.L3DeviceNew{
 		ID:           host,
-		TCPBanner:    result.DecodedText,
+		TCPBanners:   portBanners,
 		ScannerTypes: []string{"tcp"},
 	}
 

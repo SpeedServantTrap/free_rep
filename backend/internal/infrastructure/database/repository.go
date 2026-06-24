@@ -627,6 +627,7 @@ func (r *Repository) SaveOrUpdateL2Device(device *models.L2DeviceNew) error {
 			},
 			"$unset": bson.M{
 				"scan_times": "",
+				"tcp_banner": "",
 			},
 		}
 
@@ -776,10 +777,21 @@ func (r *Repository) SaveOrUpdateL3Device(device *models.L3DeviceNew) error {
 			update["$set"].(bson.M)["packets_reached"] = uniquePackets
 		}
 
-		// Update TCP banner if provided (and not just "-")
-		// Always update with new banner value to ensure latest TCP scan results are captured
-		if device.TCPBanner != "" && device.TCPBanner != "-" {
-			update["$set"].(bson.M)["tcp_banner"] = device.TCPBanner
+		// Merge TCP banners by port
+		if len(device.TCPBanners) > 0 {
+			merged := make(map[string]string)
+			for port, banner := range existing.TCPBanners {
+				merged[port] = banner
+			}
+			for port, banner := range device.TCPBanners {
+				if port == "" || banner == "" {
+					continue
+				}
+				merged[port] = banner
+			}
+			if len(merged) > 0 {
+				update["$set"].(bson.M)["tcp_banners"] = merged
+			}
 		}
 
 		// Append scanner types if provided (removing duplicates)
@@ -807,9 +819,6 @@ func (r *Repository) SaveOrUpdateL3Device(device *models.L3DeviceNew) error {
 		}
 		if device.DNS == "" {
 			device.DNS = "-"
-		}
-		if device.TCPBanner == "" {
-			device.TCPBanner = "-"
 		}
 		_, err = r.db.ICMPCollection().InsertOne(ctx, device)
 		if err != nil {
