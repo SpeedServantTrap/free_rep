@@ -1,7 +1,9 @@
 package rest
 
 import (
+	"backend/domain/models"
 	"encoding/json"
+	"net"
 	"log"
 	"net/http"
 	"strings"
@@ -145,7 +147,7 @@ func (h *SearchHandler) UniversalSearch(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Parse query format: "mac:xx:xx:xx:xx:xx:xx" or "ip:x.x.x.x"
+	// Parse query format: "mac:xx:xx:xx:xx:xx:xx", "ip:x.x.x.x", or "ip:x.x.x.x/yy"
 	var result interface{}
 	var found bool
 	var searchType string
@@ -179,13 +181,44 @@ func (h *SearchHandler) UniversalSearch(w http.ResponseWriter, r *http.Request) 
 			json.NewEncoder(w).Encode(SearchResponse{Success: false, Error: "IP address required after 'ip:'"})
 			return
 		}
-		device, err := h.app.GetL3Device(searchValue)
-		if err != nil {
-			log.Printf("UniversalSearch: L3 device not found for IP='%s', error: %v", searchValue, err)
+		if strings.Contains(searchValue, "/") {
+			searchType = "cidr"
+			networkIP, ipNet, err := net.ParseCIDR(searchValue)
+			if err != nil {
+				log.Printf("UniversalSearch: invalid CIDR '%s', error: %v", searchValue, err)
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(SearchResponse{Success: false, Error: "invalid CIDR notation after 'ip:'"})
+				return
+			}
+			ipNet.IP = networkIP
+
+			devices, err := h.app.GetAllL3Devices()
+			if err != nil {
+				log.Printf("UniversalSearch: failed to load L3 devices for CIDR '%s', error: %v", searchValue, err)
+			} else {
+				matches := make([]models.L3DeviceNew, 0)
+				for _, device := range devices {
+					deviceIP := net.ParseIP(device.ID)
+					if deviceIP == nil {
+						continue
+					}
+					if ipNet.Contains(deviceIP) {
+						matches = append(matches, device)
+					}
+				}
+				log.Printf("UniversalSearch: found %d L3 devices for CIDR='%s'", len(matches), searchValue)
+				result = matches
+				found = len(matches) > 0
+			}
 		} else {
-			log.Printf("UniversalSearch: found L3 device for IP='%s'", searchValue)
-			result = device
-			found = true
+			device, err := h.app.GetL3Device(searchValue)
+			if err != nil {
+				log.Printf("UniversalSearch: L3 device not found for IP='%s', error: %v", searchValue, err)
+			} else {
+				log.Printf("UniversalSearch: found L3 device for IP='%s'", searchValue)
+				result = device
+				found = true
+			}
 		}
 	} else {
 		// Try to detect if it's a MAC or IP address
@@ -202,6 +235,32 @@ func (h *SearchHandler) UniversalSearch(w http.ResponseWriter, r *http.Request) 
 				log.Printf("UniversalSearch: found L2 device for auto-detected MAC='%s'", query)
 				result = device
 				found = true
+			}
+		} else if strings.Contains(query, "/") {
+			searchType = "cidr"
+			networkIP, ipNet, err := net.ParseCIDR(query)
+			if err != nil {
+				log.Printf("UniversalSearch: invalid auto-detected CIDR '%s', error: %v", query, err)
+			} else {
+				ipNet.IP = networkIP
+				devices, err := h.app.GetAllL3Devices()
+				if err != nil {
+					log.Printf("UniversalSearch: failed to load L3 devices for auto-detected CIDR '%s', error: %v", query, err)
+				} else {
+					matches := make([]models.L3DeviceNew, 0)
+					for _, device := range devices {
+						deviceIP := net.ParseIP(device.ID)
+						if deviceIP == nil {
+							continue
+						}
+						if ipNet.Contains(deviceIP) {
+							matches = append(matches, device)
+						}
+					}
+					log.Printf("UniversalSearch: found %d L3 devices for auto-detected CIDR='%s'", len(matches), query)
+					result = matches
+					found = len(matches) > 0
+				}
 			}
 		} else if strings.Contains(query, ".") {
 			// Looks like IP address

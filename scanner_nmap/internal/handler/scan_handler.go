@@ -39,6 +39,8 @@ func HandleMessage(ctx context.Context, msg queue.Delivery, rabbitMQ *queue.Rabb
 		req, err := usecases.UdpTcpScanner(ctx, tcpUdpRequest)
 		if err != nil {
 			log.Errorf("Failed to scan TCP/UDP: %v", err)
+			req.TaskID = tcpUdpRequest.TaskID
+			req.Host = tcpUdpRequest.IP
 		}
 		sendResponse(rabbitMQ, msg, req, err, log)
 
@@ -52,6 +54,8 @@ func HandleMessage(ctx context.Context, msg queue.Delivery, rabbitMQ *queue.Rabb
 		req, err := usecases.OSDetectionScanner(ctx, osRequest)
 		if err != nil {
 			log.Errorf("Failed to scan OS detection: %v", err)
+			req.TaskID = osRequest.TaskID
+			req.Host = osRequest.IP
 		}
 		sendResponse(rabbitMQ, msg, req, err, log)
 
@@ -65,6 +69,8 @@ func HandleMessage(ctx context.Context, msg queue.Delivery, rabbitMQ *queue.Rabb
 		req, err := usecases.HostDiscoveryScanner(ctx, hostRequest)
 		if err != nil {
 			log.Errorf("Failed to scan host discovery: %v", err)
+			req.TaskID = hostRequest.TaskID
+			req.Host = hostRequest.IP
 		}
 		sendResponse(rabbitMQ, msg, req, err, log)
 

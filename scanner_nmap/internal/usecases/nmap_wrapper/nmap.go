@@ -10,7 +10,7 @@ import (
 )
 
 func UDPScan(ctx context.Context, target string, ports string) (*nmap.Run, error) {
-	scanCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	scanCtx, cancel := context.WithTimeout(ctx, 6*time.Minute)
 	defer cancel()
 
 	// Try with privileged mode first
@@ -21,8 +21,9 @@ func UDPScan(ctx context.Context, target string, ports string) (*nmap.Run, error
 		nmap.WithUDPScan(),
 		nmap.WithPrivileged(),
 		nmap.WithSkipHostDiscovery(),
-		nmap.WithTimingTemplate(3),
-		nmap.WithMaxRetries(2),
+		nmap.WithTimingTemplate(5),
+		nmap.WithMaxRetries(0),
+		nmap.WithHostTimeout(5*time.Minute),
 		nmap.WithOpenOnly(), // Only report open ports
 	)
 
@@ -35,8 +36,9 @@ func UDPScan(ctx context.Context, target string, ports string) (*nmap.Run, error
 			nmap.WithPorts(ports),
 			nmap.WithUDPScan(),
 			nmap.WithSkipHostDiscovery(),
-			nmap.WithTimingTemplate(3),
-			nmap.WithMaxRetries(2),
+			nmap.WithTimingTemplate(5),
+			nmap.WithMaxRetries(0),
+			nmap.WithHostTimeout(5*time.Minute),
 			nmap.WithOpenOnly(), // Only report open ports
 		)
 		if err != nil {

@@ -625,13 +625,9 @@ func (r *Repository) SaveOrUpdateL2Device(device *models.L2DeviceNew) error {
 			"$set": bson.M{
 				"last_seen": now,
 			},
-		}
-
-		// Append new scan times if not already present (removing duplicates)
-		if len(device.ScanTimes) > 0 {
-			uniqueScanTimes := append(existing.ScanTimes, device.ScanTimes...)
-			uniqueScanTimes = removeDuplicates(uniqueScanTimes)
-			update["$set"].(bson.M)["scan_times"] = uniqueScanTimes
+			"$unset": bson.M{
+				"scan_times": "",
+			},
 		}
 
 		// Update vendor if provided
@@ -733,6 +729,9 @@ func (r *Repository) SaveOrUpdateL3Device(device *models.L3DeviceNew) error {
 			"$set": bson.M{
 				"last_seen": now,
 			},
+			"$unset": bson.M{
+				"scan_times": "",
+			},
 		}
 
 		// Update MAC if provided (and not just "-")
@@ -775,13 +774,6 @@ func (r *Repository) SaveOrUpdateL3Device(device *models.L3DeviceNew) error {
 			uniquePackets := append(existing.PacketsReached, device.PacketsReached...)
 			uniquePackets = removeDuplicates(uniquePackets)
 			update["$set"].(bson.M)["packets_reached"] = uniquePackets
-		}
-
-		// Append scan times if provided (removing duplicates)
-		if len(device.ScanTimes) > 0 {
-			uniqueScanTimes := append(existing.ScanTimes, device.ScanTimes...)
-			uniqueScanTimes = removeDuplicates(uniqueScanTimes)
-			update["$set"].(bson.M)["scan_times"] = uniqueScanTimes
 		}
 
 		// Update TCP banner if provided (and not just "-")

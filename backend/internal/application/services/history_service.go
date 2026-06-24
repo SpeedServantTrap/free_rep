@@ -6,7 +6,6 @@ import (
 	"log"
 	"strings"
 	"sync"
-	"time"
 )
 
 type SearchRepository interface {
@@ -282,11 +281,9 @@ func (hs *HistoryService) SaveTCPResponse(result models.TCPResponse) {
 
 	// Also save to L3 device in new format
 	if result.Status == "completed" && host != "" {
-		scanTime := time.Now().Format(time.RFC3339)
 		l3Device := &models.L3DeviceNew{
 			ID:            host,
 			TCPBanner:     result.DecodedText,
-			ScanTimes:     []string{scanTime},
 			ScannerTypes:  []string{"tcp"},
 		}
 		if err := hs.repo.SaveOrUpdateL3Device(l3Device); err != nil {
@@ -312,11 +309,9 @@ func (hs *HistoryService) ProcessTCPToL3Devices(result models.TCPResponse) {
 		return
 	}
 
-	scanTime := time.Now().Format(time.RFC3339)
 	l3Device := &models.L3DeviceNew{
 		ID:           host,
 		TCPBanner:    result.DecodedText,
-		ScanTimes:    []string{scanTime},
 		ScannerTypes: []string{"tcp"},
 	}
 
@@ -338,7 +333,6 @@ func (hs *HistoryService) ProcessARPToL2Devices(result models.ARPResponse) {
 		return
 	}
 
-	scanTime := time.Now().Format(time.RFC3339)
 	log.Printf("Processing ARP scan: Total devices=%d", len(result.Devices))
 
 	savedCount := 0
@@ -367,7 +361,6 @@ func (hs *HistoryService) ProcessARPToL2Devices(result models.ARPResponse) {
 		l2Device := &models.L2DeviceNew{
 			ID:           device.MAC,
 			Vendor:       device.Vendor,
-			ScanTimes:    []string{scanTime},
 			ScannerTypes: []string{"arp"},
 			IPAddresses:  []string{device.IP},
 		}
@@ -431,8 +424,6 @@ func (hs *HistoryService) ProcessICMPToL3Devices(result models.ICMPResponse) {
 		return
 	}
 
-	scanTime := time.Now().Format(time.RFC3339)
-
 	for _, icmpResult := range result.Results {
 		// Skip if packets didn't reach (not found)
 		if icmpResult.PacketsReceived == 0 {
@@ -447,7 +438,6 @@ func (hs *HistoryService) ProcessICMPToL3Devices(result models.ICMPResponse) {
 		l3Device := &models.L3DeviceNew{
 			ID:             icmpResult.Address,
 			PacketsReached:  []string{packetsReached},
-			ScanTimes:       []string{scanTime},
 			ScannerTypes:    []string{"icmp"},
 		}
 
@@ -464,8 +454,6 @@ func (hs *HistoryService) ProcessNmapTcpUdpToL3Devices(result models.NmapTcpUdpR
 	if hs.repo == nil {
 		return
 	}
-
-	scanTime := time.Now().Format(time.RFC3339)
 
 	if result.Host == "" {
 		log.Printf("Skipping L3 device save - empty host")
@@ -509,7 +497,6 @@ func (hs *HistoryService) ProcessNmapTcpUdpToL3Devices(result models.NmapTcpUdpR
 		ID:           result.Host,
 		TCPOpenPorts: tcpPorts,
 		UDPOpenPorts: udpPorts,
-		ScanTimes:    []string{scanTime},
 		ScannerTypes: []string{"nmap"},
 	}
 
@@ -526,8 +513,6 @@ func (hs *HistoryService) ProcessNmapOsDetectionToL3Devices(result models.NmapOs
 		return
 	}
 
-	scanTime := time.Now().Format(time.RFC3339)
-
 	if result.Host == "" {
 		return
 	}
@@ -535,7 +520,6 @@ func (hs *HistoryService) ProcessNmapOsDetectionToL3Devices(result models.NmapOs
 	l3Device := &models.L3DeviceNew{
 		ID:          result.Host,
 		OS:          result.Name,
-		ScanTimes:   []string{scanTime},
 		ScannerTypes: []string{"nmap"},
 	}
 
@@ -552,8 +536,6 @@ func (hs *HistoryService) ProcessNmapHostDiscoveryToL3Devices(result models.Nmap
 		return
 	}
 
-	scanTime := time.Now().Format(time.RFC3339)
-
 	if result.Host == "" {
 		return
 	}
@@ -561,7 +543,6 @@ func (hs *HistoryService) ProcessNmapHostDiscoveryToL3Devices(result models.Nmap
 	l3Device := &models.L3DeviceNew{
 		ID:           result.Host,
 		DNS:          result.DNS,
-		ScanTimes:    []string{scanTime},
 		ScannerTypes: []string{"nmap"},
 	}
 
@@ -578,8 +559,6 @@ func (hs *HistoryService) LinkARPToL3Devices(result models.ARPResponse) {
 		return
 	}
 
-	scanTime := time.Now().Format(time.RFC3339)
-
 	for _, device := range result.Devices {
 		if device.Status != "online" || device.IP == "" || device.MAC == "" {
 			continue
@@ -588,7 +567,6 @@ func (hs *HistoryService) LinkARPToL3Devices(result models.ARPResponse) {
 		l3Device := &models.L3DeviceNew{
 			ID:           device.IP,
 			MAC:          device.MAC,
-			ScanTimes:    []string{scanTime},
 			ScannerTypes: []string{"arp"},
 		}
 

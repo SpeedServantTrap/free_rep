@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Network, Radio, Shield, Terminal, Clock, Activity, Zap } from 'lucide-react'
 import { useStore } from '@/store'
-import { StatusDot, Badge } from '@/components/ui'
+import { StatusDot, Badge, Button } from '@/components/ui'
 import { formatDistanceToNow } from 'date-fns'
 
 const SCANNER_TILES = [
@@ -30,11 +30,20 @@ export default function Dashboard() {
           <h1 className="page-title"><Activity size={22} /> Dashboard</h1>
           <p className="page-subtitle">Network scanning control center</p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <StatusDot status={wsStatus} />
-          <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            {wsStatus === 'connected' ? 'Backend ready' : 'Reconnecting…'}
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => window.open('/search?returnTo=/', '_blank', 'noopener,noreferrer')}
+          >
+            Open Search
+          </Button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <StatusDot status={wsStatus} />
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+              {wsStatus === 'connected' ? 'Backend ready' : 'Reconnecting…'}
+            </span>
+          </div>
         </div>
       </div>
 

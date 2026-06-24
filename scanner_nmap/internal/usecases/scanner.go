@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"scanner_nmap/internal/domain"
 	"scanner_nmap/internal/usecases/nmap_wrapper"
+	"strings"
+	"sync"
 
 	"github.com/Ullaakut/nmap/v3"
 )
 
 func UdpTcpScanner(ctx context.Context, request domain.ScanTcpUdpRequest) (response domain.ScanTcpUdpResponse, err error) {
-	var scanResult *nmap.Run
+	var scanResults []*nmap.Run
 
 	scanType := "TCP"
 	if request.ScannerType == "UDP" || request.ScannerType == "udp_scan" {
@@ -20,9 +22,64 @@ func UdpTcpScanner(ctx context.Context, request domain.ScanTcpUdpRequest) (respo
 	fmt.Printf("Starting %s scan for %s on ports %s\n", scanType, request.IP, request.Ports)
 
 	if request.ScannerType == "UDP" || request.ScannerType == "udp_scan" {
-		scanResult, err = nmap_wrapper.UDPScan(ctx, request.IP, request.Ports)
+		if isFullPortRange(request.Ports) {
+			udpPortChunks := []string{
+				"1-8192",
+				"8193-16384",
+				"16385-24576",
+				"24577-32768",
+				"32769-40960",
+				"40961-49152",
+				"49153-57344",
+				"57345-65535",
+			}
+			fmt.Printf("UDP full-range scan detected; running %d chunks in parallel\n", len(udpPortChunks))
+
+			type chunkResult struct {
+				run *nmap.Run
+				err error
+			}
+
+			results := make([]chunkResult, len(udpPortChunks))
+			var wg sync.WaitGroup
+			for i, chunk := range udpPortChunks {
+				wg.Add(1)
+				go func(idx int, portChunk string) {
+					defer wg.Done()
+					run, scanErr := nmap_wrapper.UDPScan(ctx, request.IP, portChunk)
+					results[idx] = chunkResult{run: run, err: scanErr}
+				}(i, chunk)
+			}
+			wg.Wait()
+
+			for i, r := range results {
+				if r.err != nil {
+					fmt.Printf("UDP chunk %s failed: %v\n", udpPortChunks[i], r.err)
+					continue
+				}
+				if r.run != nil {
+					scanResults = append(scanResults, r.run)
+				}
+			}
+
+			if len(scanResults) == 0 {
+				return domain.ScanTcpUdpResponse{}, fmt.Errorf("all UDP chunks failed")
+			}
+		} else {
+			scanResult, scanErr := nmap_wrapper.UDPScan(ctx, request.IP, request.Ports)
+			if scanErr != nil {
+				err = scanErr
+			} else if scanResult != nil {
+				scanResults = append(scanResults, scanResult)
+			}
+		}
 	} else {
-		scanResult, err = nmap_wrapper.TCPScan(ctx, request.IP, request.Ports)
+		scanResult, scanErr := nmap_wrapper.TCPScan(ctx, request.IP, request.Ports)
+		if scanErr != nil {
+			err = scanErr
+		} else if scanResult != nil {
+			scanResults = append(scanResults, scanResult)
+		}
 	}
 
 	if err != nil {
@@ -30,33 +87,29 @@ func UdpTcpScanner(ctx context.Context, request domain.ScanTcpUdpRequest) (respo
 		return domain.ScanTcpUdpResponse{}, err
 	}
 
-	if scanResult == nil {
+	if len(scanResults) == 0 {
 		fmt.Printf("%s scanner doesn't have any results\n", scanType)
 		return domain.ScanTcpUdpResponse{}, fmt.Errorf("no scan results")
 	}
 
 	// Detailed logging of scan results
-	fmt.Printf("Scan result stats: %d hosts found\n", len(scanResult.Hosts))
-	for i, host := range scanResult.Hosts {
-		fmt.Printf("Host %d: Status=%s, %d addresses, %d ports\n",
-			i, host.Status.State, len(host.Addresses), len(host.Ports))
-
-		// Log first few ports for debugging
-		for j, port := range host.Ports {
-			if j < 5 { // Log first 5 ports
-				fmt.Printf("  Port %d: ID=%d, Protocol=%s, State=%s, Service=%s\n",
-					j, port.ID, port.Protocol, port.State.State, port.Service.Name)
-			}
-		}
-		if len(host.Ports) > 5 {
-			fmt.Printf("  ... and %d more ports\n", len(host.Ports)-5)
+	for runIdx, scanResult := range scanResults {
+		fmt.Printf("Scan run %d stats: %d hosts found\n", runIdx+1, len(scanResult.Hosts))
+		for i, host := range scanResult.Hosts {
+			fmt.Printf("Host %d: Status=%s, %d addresses, %d ports\n",
+				i, host.Status.State, len(host.Addresses), len(host.Ports))
 		}
 	}
 
 	var hostResult string
-	for _, host := range scanResult.Hosts {
-		if len(host.Addresses) > 0 {
-			hostResult = host.Addresses[0].String()
+	for _, run := range scanResults {
+		for _, host := range run.Hosts {
+			if len(host.Addresses) > 0 {
+				hostResult = host.Addresses[0].String()
+				break
+			}
+		}
+		if hostResult != "" {
 			break
 		}
 	}
@@ -64,39 +117,44 @@ func UdpTcpScanner(ctx context.Context, request domain.ScanTcpUdpRequest) (respo
 	portInfo := domain.PortTcpUdpInfo{}
 	totalPorts := 0
 	openPorts := 0
+	seenOpen := map[string]struct{}{}
 
-	for _, host := range scanResult.Hosts {
-		if len(host.Addresses) == 0 {
-			continue
-		}
-
-		portInfo.Status = host.Status.State
-
-		for _, port := range host.Ports {
-			totalPorts++
-			fmt.Printf("Processing port %d: Protocol=%s, State=%s, Reason=%s\n",
-				port.ID, port.Protocol, port.State.State, port.State.Reason)
-
-			// Only add ports that are actually open
-			// Check for both "open" and "open|filtered" states
-			isOpen := port.State.State == "open" || port.State.State == "open|filtered"
-
-			if !isOpen {
-				fmt.Printf("  Skipping port %d - not open (state: %s)\n", port.ID, port.State.State)
+	for _, run := range scanResults {
+		for _, host := range run.Hosts {
+			if len(host.Addresses) == 0 {
 				continue
 			}
 
-			openPorts++
-			portInfo.AllPorts = append(portInfo.AllPorts, port.ID)
-			portInfo.Protocols = append(portInfo.Protocols, port.Protocol)
-			portInfo.State = append(portInfo.State, port.State.State)
+			portInfo.Status = host.Status.State
 
-			serviceName := port.Service.Name
-			if serviceName == "" {
-				serviceName = "unknown"
+			for _, port := range host.Ports {
+				totalPorts++
+
+				// Only add ports that are actually open
+				// Check for both "open" and "open|filtered" states
+				isOpen := port.State.State == "open" || port.State.State == "open|filtered"
+
+				if !isOpen {
+					continue
+				}
+
+				key := fmt.Sprintf("%s/%d", port.Protocol, port.ID)
+				if _, exists := seenOpen[key]; exists {
+					continue
+				}
+				seenOpen[key] = struct{}{}
+
+				openPorts++
+				portInfo.AllPorts = append(portInfo.AllPorts, port.ID)
+				portInfo.Protocols = append(portInfo.Protocols, port.Protocol)
+				portInfo.State = append(portInfo.State, port.State.State)
+
+				serviceName := port.Service.Name
+				if serviceName == "" {
+					serviceName = "unknown"
+				}
+				portInfo.ServiceName = append(portInfo.ServiceName, serviceName)
 			}
-			portInfo.ServiceName = append(portInfo.ServiceName, serviceName)
-			fmt.Printf("  Added open port %d (%s) - Service: %s\n", port.ID, port.Protocol, serviceName)
 		}
 	}
 
@@ -109,6 +167,11 @@ func UdpTcpScanner(ctx context.Context, request domain.ScanTcpUdpRequest) (respo
 	}
 
 	return responseResult, err
+}
+
+func isFullPortRange(ports string) bool {
+	normalized := strings.ReplaceAll(strings.TrimSpace(ports), " ", "")
+	return normalized == "1-65535" || normalized == "0-65535"
 }
 
 func OSDetectionScanner(ctx context.Context, request domain.OsDetectionRequest) (response domain.OsDetectionResponse, err error) {

@@ -300,7 +300,7 @@ func (p *RPCScannerPublisher) parseResponse(body []byte) (*models.Response, erro
 	}
 
 	var nmapTcpUdpResp models.NmapTcpUdpResponse
-	if err := json.Unmarshal(body, &nmapTcpUdpResp); err == nil && nmapTcpUdpResp.TaskID != "" && len(nmapTcpUdpResp.PortInfo) > 0 {
+	if err := json.Unmarshal(body, &nmapTcpUdpResp); err == nil && nmapTcpUdpResp.TaskID != "" {
 		log.Printf("Received Nmap TCP/UDP response for task %s", nmapTcpUdpResp.TaskID)
 		response := &models.Response{
 			TaskID: nmapTcpUdpResp.TaskID,

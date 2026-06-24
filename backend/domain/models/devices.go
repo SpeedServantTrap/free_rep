@@ -24,7 +24,6 @@ type L2Device struct {
 // Information accumulates from different scans (ARP, NMAP, etc.).
 type L2DeviceNew struct {
 	ID          string    `bson:"_id" json:"id"` // MAC address as ID
-	ScanTimes   []string  `bson:"scan_times" json:"scan_times"`           // Comma-separated scan times
 	Vendor      string    `bson:"vendor" json:"vendor"`                   // Device vendor from MAC
 	ScannerTypes []string `bson:"scanner_types" json:"scanner_types"`    // Comma-separated scanner types (e.g., "arp")
 	IPAddresses []string  `bson:"ip_addresses" json:"ip_addresses"`      // Comma-separated IP addresses
@@ -55,7 +54,6 @@ type L3DeviceNew struct {
 	OS             string    `bson:"os" json:"os"`                               // OS detection result or "-"
 	DNS            string    `bson:"dns" json:"dns"`                              // DNS result or "-"
 	PacketsReached []string  `bson:"packets_reached" json:"packets_reached"`     // Comma-separated packets reached (ICMP)
-	ScanTimes      []string  `bson:"scan_times" json:"scan_times"`               // Comma-separated scan times
 	TCPBanner      string    `bson:"tcp_banner" json:"tcp_banner"`               // TCP banner or "-"
 	ScannerTypes   []string  `bson:"scanner_types" json:"scanner_types"`        // Comma-separated scanner types (4 types: arp, nmap, icmp, tcp)
 	FirstSeen      time.Time `bson:"first_seen" json:"first_seen"`

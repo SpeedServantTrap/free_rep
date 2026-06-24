@@ -11,18 +11,18 @@ import ChangesPage  from './components/pages/ChangesPage'
 
 export default function App() {
   return (
-    <Layout>
-      <Routes>
-        <Route path="/"        element={<Dashboard />} />
-        <Route path="/arp"     element={<ARPScanner />} />
-        <Route path="/icmp"    element={<ICMPScanner />} />
-        <Route path="/nmap"    element={<NmapScanner />} />
-        <Route path="/tcp"     element={<TCPScanner />} />
+    <Routes>
+      <Route path="/search" element={<SearchPage />} />
+      <Route element={<Layout />}>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/arp" element={<ARPScanner />} />
+        <Route path="/icmp" element={<ICMPScanner />} />
+        <Route path="/nmap" element={<NmapScanner />} />
+        <Route path="/tcp" element={<TCPScanner />} />
         <Route path="/history" element={<HistoryPage />} />
-        <Route path="/search"  element={<SearchPage />} />
         <Route path="/changes" element={<ChangesPage />} />
-        <Route path="*"        element={<Navigate to="/" replace />} />
-      </Routes>
-    </Layout>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Route>
+    </Routes>
   )
 }

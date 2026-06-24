@@ -1,44 +1,92 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Search, Network, Shield, Globe, Server, Clock, Activity } from 'lucide-react'
 import { api }           from '@/api/http'
 import { Button, Badge, EmptyState, Card, Spinner } from '@/components/ui'
 import toast             from 'react-hot-toast'
 
 export default function SearchPage() {
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const returnTo = searchParams.get('returnTo') || '/'
+
   const [results, setResults] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [hasSearched, setHasSearched] = useState(false)
+  const [selectedDeviceId, setSelectedDeviceId] = useState(null)
+  const [query, setQuery] = useState('')
+
+  const backButtonLabel = useMemo(() => {
+    return returnTo === '/' ? 'Back to dashboard' : 'Back'
+  }, [returnTo])
 
   return (
-    <div>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title"><Search size={22} /> Device Search</h1>
-          <p className="page-subtitle">Search devices by MAC address or IP address</p>
+    <div className="search-page">
+      <div className="search-topbar">
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => navigate(returnTo)}
+        >
+          {backButtonLabel}
+        </Button>
+      </div>
+
+      <div className={`search-hero${hasSearched ? ' search-hero--compact' : ''}`}>
+        <div className="search-hero-inner">
+          <NewDeviceSearch
+            query={query}
+            setQuery={setQuery}
+            loading={loading}
+            setLoading={setLoading}
+            setResults={setResults}
+            setHasSearched={setHasSearched}
+            setSelectedDeviceId={setSelectedDeviceId}
+          />
+
+          {!hasSearched && (
+            <div className="search-helper">
+              Try <code>mac: xx:xx:xx:xx:xx:xx</code>, <code>ip: x.x.x.x</code>, or <code>x.x.x.x/yy</code>
+            </div>
+          )}
         </div>
       </div>
 
-      <NewDeviceSearch onResult={setResults} loading={loading} setLoading={setLoading} />
+      {hasSearched && (
+        <div className="search-results">
+          {loading && <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}><Spinner size="lg" /></div>}
+          {!loading && results === null && <EmptyState title="Device Search" description="Enter a MAC or IP address to search" />}
+          {!loading && results !== null && !results.found && <EmptyState title="No results found" description="Try a different MAC or IP address" />}
+          {!loading && results?.found && (
+            <DeviceSearchResult
+              data={results.data}
+              selectedDeviceId={selectedDeviceId}
+              setSelectedDeviceId={setSelectedDeviceId}
+              onFillQuery={setQuery}
+            />
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
-function NewDeviceSearch({ onResult, loading, setLoading }) {
-  const [query, setQuery] = useState('')
-  const [searchResult, setSearchResult] = useState(null)
+function NewDeviceSearch({ query, setQuery, setResults, loading, setLoading, setHasSearched, setSelectedDeviceId }) {
 
   const handleUniversalSearch = async () => {
     if (!query.trim()) return
 
+    setHasSearched(true)
+    setSelectedDeviceId(null)
     setLoading(true)
-    setSearchResult(null)
+    setResults(null)
     try {
       const res = await api.universalSearch(query)
       if (!res.success) {
         toast.error(res.error ?? 'Search failed')
-        onResult(res)
+        setResults(res)
       } else {
-        setSearchResult(res)
-        onResult(res)
+        setResults(res)
       }
     } catch (err) {
       console.error('Search error:', err)
@@ -55,66 +103,101 @@ function NewDeviceSearch({ onResult, loading, setLoading }) {
   }
 
   return (
-    <div>
-      <Card style={{ marginBottom: 20 }}>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
-          <div style={{
-            flex: 1,
-            display: 'flex',
-            gap: 0,
-            alignItems: 'stretch',
-            borderRadius: 8,
-            overflow: 'hidden',
-            border: '1px solid var(--border)',
-          }}>
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="mac: xx:xx:xx:xx:xx:xx or ip: x.x.x.x"
-              style={{
-                flex: 1,
-                padding: '12px 16px',
-                border: 'none',
-                outline: 'none',
-                fontSize: 14,
-                fontFamily: 'monospace',
-              }}
-            />
-            <Button
-              variant="primary"
-              loading={loading}
-              onClick={handleUniversalSearch}
-              disabled={!query.trim()}
-              style={{
-                borderRadius: 0,
-                borderTopLeftRadius: 0,
-                borderBottomLeftRadius: 0,
-                padding: '12px 24px',
-              }}
-            >
-              <Search size={16} />
-            </Button>
-          </div>
-        </div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-          Format: <code style={{ background: 'var(--bg-secondary)', padding: '2px 6px', borderRadius: 4 }}>mac: xx:xx:xx:xx:xx:xx</code> or <code style={{ background: 'var(--bg-secondary)', padding: '2px 6px', borderRadius: 4 }}>ip: x.x.x.x</code>
-        </div>
-      </Card>
-
-      {loading && <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}><Spinner size="lg" /></div>}
-      {!loading && searchResult === null && <EmptyState title="Device Search" description="Enter a MAC or IP address to search" />}
-      {!loading && searchResult !== null && !searchResult.found && <EmptyState title="No results found" description="Try a different MAC or IP address" />}
-      {!loading && searchResult?.found && (
-        <DeviceSearchResult data={searchResult.data} />
-      )}
-    </div>
+    <Card className="search-card">
+      <div className="search-input-row">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="mac: xx:xx:xx:xx:xx:xx or ip: x.x.x.x"
+          className="search-input"
+        />
+        <Button
+          variant="primary"
+          loading={loading}
+          onClick={handleUniversalSearch}
+          disabled={!query.trim()}
+          className="search-button"
+        >
+          <Search size={16} />
+        </Button>
+      </div>
+      <div className="search-card-hint">
+        Format: <code>mac: xx:xx:xx:xx:xx:xx</code>, <code>ip: x.x.x.x</code>, <code>ip: x.x.x.x/yy</code>, or <code>x.x.x.x/yy</code>
+      </div>
+    </Card>
   )
 }
 
-function DeviceSearchResult({ data }) {
+function DeviceSearchResult({ data, selectedDeviceId, setSelectedDeviceId, onFillQuery }) {
   if (!data) return null
+
+  if (Array.isArray(data)) {
+    const devices = data
+    const activeDevice = devices.find((device) => device.id === selectedDeviceId)
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <Card>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <div>
+              <div className="card-title" style={{ marginBottom: 4 }}>
+                CIDR Results
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                {devices.length} device{devices.length === 1 ? '' : 's'} matched
+              </div>
+            </div>
+            <Badge color="blue" dot={false}>{devices.length}</Badge>
+          </div>
+
+          <div style={{ display: 'grid', gap: 10 }}>
+            {devices.map((device) => {
+              const isActive = activeDevice?.id === device.id
+              return (
+                <div key={device.id}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDeviceId((current) => (current === device.id ? null : device.id))}
+                    className="search-hit-row"
+                    style={{
+                      textAlign: 'left',
+                      border: isActive ? '1px solid var(--blue)' : '1px solid var(--border)',
+                      background: isActive ? 'var(--blue-dim)' : 'var(--bg-hover)',
+                      color: 'inherit',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                      <div>
+                        <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{device.id}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                          {device.mac || 'No MAC'} • {device.os || 'Unknown OS'}
+                        </div>
+                      </div>
+                      <Badge color={isActive ? 'blue' : 'gray'} dot={false}>{isActive ? 'Hide' : 'Open'}</Badge>
+                    </div>
+                  </button>
+
+                  {isActive && (
+                    <div style={{ marginTop: 12, paddingLeft: 8 }}>
+                      <L3DeviceCard device={device} onFillQuery={onFillQuery} />
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+
+        {!activeDevice && devices.length > 0 && (
+          <div style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
+            Click any IP to open details here.
+          </div>
+        )}
+      </div>
+    )
+  }
 
   // Check if it's L2 or L3 device based on structure
   // API returns 'id' field (not '_id'), so we check both
@@ -125,21 +208,27 @@ function DeviceSearchResult({ data }) {
   const isL2 = !isL3 && idField && idField.includes(':')
 
   if (isL3) {
-    return <L3DeviceCard device={data} />
+    return <L3DeviceCard device={data} onFillQuery={onFillQuery} />
   } else if (isL2) {
-    return <L2DeviceCard device={data} />
+    return <L2DeviceCard device={data} onFillQuery={onFillQuery} />
   }
 
   return <EmptyState title="Unknown device type" />
 }
 
-function L2DeviceCard({ device }) {
+function L2DeviceCard({ device, onFillQuery }) {
   const hasIpAddresses = device.ip_addresses?.length > 0
   const hasScanTimes = device.scan_times?.length > 0
   const hasScanners = device.scanner_types?.length > 0
+  const [visibleIpCount, setVisibleIpCount] = useState(15)
+  const [showAllScanTimes, setShowAllScanTimes] = useState(false)
 
   // Use 'id' field (MAC address) or fallback to 'mac' or '_id'
   const displayId = device.id || device.mac || device._id
+  const visibleIpAddresses = device.ip_addresses?.slice(0, visibleIpCount) ?? []
+  const hasMoreIpAddresses = (device.ip_addresses?.length ?? 0) > visibleIpCount
+  const visibleScanTimes = showAllScanTimes ? (device.scan_times ?? []) : (device.scan_times?.slice(0, 10) ?? [])
+  const hiddenScanTimesCount = Math.max((device.scan_times?.length ?? 0) - visibleScanTimes.length, 0)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -191,19 +280,37 @@ function L2DeviceCard({ device }) {
             IP Addresses
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {device.ip_addresses?.map((ip, i) => (
-              <Badge key={i} style={{
-                background: 'rgba(59, 130, 246, 0.3)',
-                color: '#bfdbfe',
-                border: '1px solid rgba(59, 130, 246, 0.5)',
-                fontFamily: 'monospace',
-                fontWeight: 700,
-                fontSize: 13
-              }}>
-                {ip}
-              </Badge>
+            {visibleIpAddresses.map((ip, i) => (
+              <button
+                key={i}
+                type="button"
+                className="search-inline-link"
+                onClick={() => onFillQuery(`ip: ${ip}`)}
+              >
+                <Badge style={{
+                  background: 'rgba(59, 130, 246, 0.3)',
+                  color: '#bfdbfe',
+                  border: '1px solid rgba(59, 130, 246, 0.5)',
+                  fontFamily: 'monospace',
+                  fontWeight: 700,
+                  fontSize: 13
+                }}>
+                  {ip}
+                </Badge>
+              </button>
             ))}
           </div>
+          {hasMoreIpAddresses && (
+            <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center' }}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setVisibleIpCount((count) => count + 15)}
+              >
+                Загрузить ещё IP ({Math.min(15, device.ip_addresses.length - visibleIpCount)})
+              </Button>
+            </div>
+          )}
         </Card>
       )}
 
@@ -215,7 +322,7 @@ function L2DeviceCard({ device }) {
             Scan Times
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {device.scan_times.slice(0, 10).map((time, i) => (
+            {visibleScanTimes.map((time, i) => (
               <span key={i} style={{
                 fontSize: 12,
                 padding: '6px 10px',
@@ -228,12 +335,18 @@ function L2DeviceCard({ device }) {
                 {new Date(time).toLocaleString()}
               </span>
             ))}
-            {device.scan_times.length > 10 && (
-              <span style={{ fontSize: 12, color: '#c7d2fe', fontWeight: 700 }}>
-                +{device.scan_times.length - 10} more...
-              </span>
-            )}
           </div>
+          {hiddenScanTimesCount > 0 && (
+            <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center' }}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowAllScanTimes(true)}
+              >
+                Показать все времена (+{hiddenScanTimesCount})
+              </Button>
+            </div>
+          )}
         </Card>
       )}
 
@@ -264,15 +377,18 @@ function L2DeviceCard({ device }) {
   )
 }
 
-function L3DeviceCard({ device }) {
+function L3DeviceCard({ device, onFillQuery }) {
   const hasPorts = (device.tcp_open_ports?.length > 0) || (device.udp_open_ports?.length > 0)
   const hasPackets = device.packets_reached?.length > 0
   const hasBanner = device.tcp_banner && device.tcp_banner !== '-'
   const hasScanTimes = device.scan_times?.length > 0
   const hasScanners = device.scanner_types?.length > 0
+  const [showAllScanTimes, setShowAllScanTimes] = useState(false)
 
   // Use 'id' field (IP address) or fallback to 'ip' or '_id'
   const displayId = device.id || device.ip || device._id
+  const visibleScanTimes = showAllScanTimes ? (device.scan_times ?? []) : (device.scan_times?.slice(0, 10) ?? [])
+  const hiddenScanTimesCount = Math.max((device.scan_times?.length ?? 0) - visibleScanTimes.length, 0)
 
   return (
     <Card style={{
@@ -306,10 +422,16 @@ function L3DeviceCard({ device }) {
           <Badge dot={false} style={{ background: 'rgba(34, 197, 94, 0.3)', color: '#86efac', fontWeight: 700, fontSize: 14, padding: '6px 12px' }}>
             Active
           </Badge>
-          {device.mac && (
-            <Badge dot={false} style={{ background: 'rgba(168, 85, 247, 0.4)', color: '#ddd6fe', fontFamily: 'monospace', fontWeight: 700, fontSize: 15, padding: '8px 12px' }}>
-              {device.mac}
-            </Badge>
+          {device.mac && device.mac !== '-' && (
+            <button
+              type="button"
+              className="search-inline-link"
+              onClick={() => onFillQuery(`mac: ${device.mac}`)}
+            >
+              <Badge dot={false} style={{ background: 'rgba(168, 85, 247, 0.4)', color: '#ddd6fe', fontFamily: 'monospace', fontWeight: 700, fontSize: 15, padding: '8px 12px' }}>
+                {device.mac}
+              </Badge>
+            </button>
           )}
         </div>
       </div>
@@ -415,7 +537,7 @@ function L3DeviceCard({ device }) {
             Scan Times
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {device.scan_times.slice(0, 10).map((time, i) => (
+            {visibleScanTimes.map((time, i) => (
               <span key={i} style={{
                 fontSize: 12,
                 padding: '6px 10px',
@@ -428,12 +550,18 @@ function L3DeviceCard({ device }) {
                 {new Date(time).toLocaleString()}
               </span>
             ))}
-            {device.scan_times.length > 10 && (
-              <span style={{ fontSize: 12, color: '#c7d2fe', fontWeight: 700 }}>
-                +{device.scan_times.length - 10} more...
-              </span>
-            )}
           </div>
+          {hiddenScanTimesCount > 0 && (
+            <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center' }}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowAllScanTimes(true)}
+              >
+                Показать все времена (+{hiddenScanTimesCount})
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
