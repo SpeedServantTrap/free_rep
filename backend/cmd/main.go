@@ -248,6 +248,41 @@ func main() {
 		log.Println("[ICMP AutoScan] Delivery channel closed")
 	}()
 
+	// ── Nmap Auto Scan Results consumer ───────────────────────────────────────
+	// Consumes from the `nmap_auto_scan_results` queue (published by the Nmap scanner
+	// auto-scanner), processes partial/final results and saves them to MongoDB.
+	go func() {
+		deliveries, err := publisher.ConsumeChangeEvents("nmap_auto_scan_results")
+		if err != nil {
+			log.Printf("[Nmap AutoScan] Failed to start consumer: %v", err)
+			return
+		}
+		log.Println("[Nmap AutoScan] Consumer started — waiting for auto scan results…")
+
+		for msg := range deliveries {
+			log.Printf("[Nmap AutoScan] Received auto scan result")
+			var nmapResp models.NmapComprehensiveResponse
+			if err := json.Unmarshal(msg.Body, &nmapResp); err != nil {
+				log.Printf("[Nmap AutoScan] Cannot parse Nmap response: %v — body: %s", err, string(msg.Body))
+				msg.Nack(false, false)
+				continue
+			}
+
+			log.Printf("[Nmap AutoScan] Processing Nmap auto scan: TaskID=%s, Status=%s, Results=%d",
+				nmapResp.TaskID, nmapResp.Status, len(nmapResp.Results))
+
+			response := &models.Response{
+				TaskID: nmapResp.TaskID,
+				Result: nmapResp,
+			}
+			app.ProcessResponse(response)
+
+			log.Printf("[Nmap AutoScan] Processed auto scan result: %s", nmapResp.TaskID)
+			msg.Ack(false)
+		}
+		log.Println("[Nmap AutoScan] Delivery channel closed")
+	}()
+
 	// Keep main goroutine alive
 	select {}
 }

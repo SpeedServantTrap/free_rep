@@ -147,6 +147,8 @@ services:
       context: ./scanner_nmap
       dockerfile: Dockerfile
     container_name: scanner-nmap
+    env_file:
+      - ./scanner_nmap/.env
     cap_add:
       - NET_RAW
       - NET_ADMIN

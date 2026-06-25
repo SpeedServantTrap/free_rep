@@ -2,6 +2,7 @@ package domain
 
 type RawRequest struct {
 	ScanMethod string `json:"scan_method"`
+	Command    string `json:"command,omitempty"`
 }
 type ScanTcpUdpRequest struct {
 	TaskID      string `json:"task_id"`
@@ -50,6 +51,7 @@ type ComprehensiveScanRequest struct {
 	TaskID     string `json:"task_id"`
 	Input      string `json:"input"`
 	ScanMethod string `json:"scan_method"`
+	Command    string `json:"command,omitempty"`
 }
 
 type ComprehensiveTargetResult struct {

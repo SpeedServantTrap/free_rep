@@ -227,6 +227,7 @@ func (c *Client) processNmapRequest(options any, taskID string) *models.Response
 
 	var nmapOpts struct {
 		ScanMethod  string `json:"scan_method"`
+		Command     string `json:"command,omitempty"`
 		IP          string `json:"ip"`
 		Input       string `json:"input"`
 		Ports       string `json:"ports"`
@@ -244,6 +245,19 @@ func (c *Client) processNmapRequest(options any, taskID string) *models.Response
 	log.Printf("Parsed Nmap options: ScanMethod=%s, IP=%s, Ports=%s, ScannerType=%s",
 		nmapOpts.ScanMethod, nmapOpts.IP, nmapOpts.Ports, nmapOpts.ScannerType)
 
+	if nmapOpts.Command == "start" || nmapOpts.Command == "stop" {
+		log.Printf("Nmap auto scan command: %s", nmapOpts.Command)
+		nmapRequest := models.NmapComprehensiveRequest{
+			TaskID:  taskID,
+			Command: nmapOpts.Command,
+		}
+
+		return c.app.ProcessRequest(&models.Request{
+			ScannerService: "nmap_service",
+			Options:        nmapRequest,
+		})
+	}
+
 	switch nmapOpts.ScanMethod {
 	case "comprehensive_scan":
 		if nmapOpts.Input == "" {
@@ -257,6 +271,7 @@ func (c *Client) processNmapRequest(options any, taskID string) *models.Response
 			TaskID:     taskID,
 			Input:      nmapOpts.Input,
 			ScanMethod: "comprehensive_scan",
+			Command:    nmapOpts.Command,
 		}
 
 		log.Printf("Launching async NmapComprehensiveRequest: task=%s input=%s", taskID, nmapOpts.Input)

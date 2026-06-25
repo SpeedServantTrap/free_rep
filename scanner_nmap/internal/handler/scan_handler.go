@@ -9,6 +9,18 @@ import (
 	"scanner_nmap/pkg/queue"
 )
 
+type AutoScannerInterface interface {
+	Start()
+	Stop()
+	IsRunning() bool
+}
+
+var AutoScannerInstance AutoScannerInterface
+
+func SetAutoScannerInstance(autoScanner AutoScannerInterface) {
+	AutoScannerInstance = autoScanner
+}
+
 func HandleMessage(ctx context.Context, msg queue.Delivery, rabbitMQ *queue.RabbitMQ, log logger.Logger) {
 	log.Infof("Received scan request: %s", string(msg.Body))
 
@@ -17,8 +29,10 @@ func HandleMessage(ctx context.Context, msg queue.Delivery, rabbitMQ *queue.Rabb
 	}
 
 	var scanType struct {
+		TaskID      string `json:"task_id"`
 		ScanMethod  string `json:"scan_method"`
 		ScannerType string `json:"scanner_type"`
+		Command     string `json:"command,omitempty"`
 	}
 
 	if err := json.Unmarshal(msg.Body, &scanType); err != nil {
@@ -27,6 +41,26 @@ func HandleMessage(ctx context.Context, msg queue.Delivery, rabbitMQ *queue.Rabb
 	}
 
 	log.Infof("Scan method: %s, Scanner type: %s", scanType.ScanMethod, scanType.ScannerType)
+
+	if scanType.Command == "start" {
+		if AutoScannerInstance != nil {
+			AutoScannerInstance.Start()
+			sendGenericStatusResponse(rabbitMQ, msg, scanType.TaskID, map[string]string{"status": "started"}, log)
+		} else {
+			sendGenericStatusResponse(rabbitMQ, msg, scanType.TaskID, map[string]string{"status": "failed", "error": "Auto scanner instance is not set"}, log)
+		}
+		return
+	}
+
+	if scanType.Command == "stop" {
+		if AutoScannerInstance != nil {
+			AutoScannerInstance.Stop()
+			sendGenericStatusResponse(rabbitMQ, msg, scanType.TaskID, map[string]string{"status": "stopped"}, log)
+		} else {
+			sendGenericStatusResponse(rabbitMQ, msg, scanType.TaskID, map[string]string{"status": "failed", "error": "Auto scanner instance is not set"}, log)
+		}
+		return
+	}
 
 	switch {
 	case scanType.ScanMethod == "comprehensive_scan":
@@ -109,6 +143,23 @@ func HandleMessage(ctx context.Context, msg queue.Delivery, rabbitMQ *queue.Rabb
 	}
 
 	log.Infof("Scan completed")
+}
+
+func sendGenericStatusResponse(rabbitMQ *queue.RabbitMQ, msg queue.Delivery, taskID string, result map[string]string, log logger.Logger) {
+	if msg.ReplyTo == "" {
+		return
+	}
+	body, err := json.Marshal(map[string]any{
+		"task_id": taskID,
+		"result":  result,
+	})
+	if err != nil {
+		log.Errorf("Failed to marshal generic status response: %v", err)
+		return
+	}
+	if err := rabbitMQ.SendResponse(msg.ReplyTo, msg.CorrelationId, body); err != nil {
+		log.Errorf("Failed to send generic status response: %v", err)
+	}
 }
 
 func sendResponse[T domain.ScanTcpUdpResponse | domain.OsDetectionResponse | domain.HostDiscoveryResponse | domain.ComprehensiveScanResponse](

@@ -43,6 +43,7 @@ func (rs *RequestService) processNmapRequest(options any) *models.Response {
 	var scanType struct {
 		ScannerType string `json:"scanner_type"`
 		ScanMethod  string `json:"scan_method"`
+		Command     string `json:"command,omitempty"`
 	}
 
 	if err := json.Unmarshal(optionsJSON, &scanType); err != nil {
@@ -54,7 +55,7 @@ func (rs *RequestService) processNmapRequest(options any) *models.Response {
 	}
 
 	switch {
-	case scanType.ScanMethod == "comprehensive_scan":
+	case scanType.Command == "start" || scanType.Command == "stop" || scanType.ScanMethod == "comprehensive_scan":
 		var comprehensiveReq models.NmapComprehensiveRequest
 		if err := json.Unmarshal(optionsJSON, &comprehensiveReq); err != nil {
 			log.Printf("Failed to unmarshal comprehensive Nmap request: %v", err)

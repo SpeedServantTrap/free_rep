@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react'
-import { Shield, Copy, Check } from 'lucide-react'
+import { useState, useCallback, useEffect } from 'react'
+import { Shield, Copy, Check, Play, Square } from 'lucide-react'
 import { useStore }         from '@/store'
 import { useSend }          from '@/hooks/useWebSocket'
 import { Button, Badge, Card, EmptyState, ScanAnimation } from '@/components/ui'
@@ -9,21 +9,52 @@ const SERVICE = 'nmap_service'
 export default function NmapScanner() {
   const [input,  setInput]  = useState('')
   const [copied, setCopied] = useState(false)
+  const [pendingCommand, setPendingCommand] = useState(null)
 
   const send         = useSend()
   const activeScan   = useStore((s) => s.activeScan)
   const latestResult = useStore((s) => s.latestResult)
   const wsStatus     = useStore((s) => s.wsStatus)
+  const autoScanRunning = useStore((s) => s.nmapAutoScanRunning)
+  const setAutoScanRunning = useStore((s) => s.setNmapAutoScanRunning)
 
-  const isScanning  = activeScan?.scanner_service === SERVICE
+  const isScanning  = activeScan?.scanner_service === SERVICE && activeScan?.options?.scan_method === 'comprehensive_scan' && !activeScan?.options?.command
   const isConnected = wsStatus === 'connected'
   const result     = latestResult?.scanner_service === SERVICE ? latestResult : null
   const scanResult = result?.result
+
+  useEffect(() => {
+    if (pendingCommand && result?.result?.status) {
+      const status = result.result.status
+
+      if (pendingCommand === 'start' && status === 'started') {
+        setAutoScanRunning(true)
+        setPendingCommand(null)
+      } else if (pendingCommand === 'stop' && status === 'stopped') {
+        setAutoScanRunning(false)
+        setPendingCommand(null)
+      } else if (status === 'failed') {
+        setPendingCommand(null)
+      }
+    }
+  }, [result, pendingCommand, setAutoScanRunning])
 
   const handleScan = useCallback(() => {
     if (!input || isScanning) return
     send(SERVICE, { scan_method: 'comprehensive_scan', input })
   }, [input, isScanning, send])
+
+  const handleStartAutoScan = useCallback(() => {
+    if (!isConnected || autoScanRunning || pendingCommand) return
+    send(SERVICE, { command: 'start' })
+    setPendingCommand('start')
+  }, [isConnected, autoScanRunning, pendingCommand, send])
+
+  const handleStopAutoScan = useCallback(() => {
+    if (!isConnected || !autoScanRunning || pendingCommand) return
+    send(SERVICE, { command: 'stop' })
+    setPendingCommand('stop')
+  }, [isConnected, autoScanRunning, pendingCommand, send])
 
   const handleKey = (e) => {
     if (e.ctrlKey && e.key === 'Enter') handleScan()
@@ -63,9 +94,43 @@ export default function NmapScanner() {
           </div>
         </Card>
 
+        <Card title="Auto Scan Control">
+          <div style={{ marginTop: 16, display: 'flex', gap: 10, alignItems: 'center' }}>
+            <Button
+              variant="primary"
+              size="lg"
+              loading={pendingCommand === 'start'}
+              onClick={handleStartAutoScan}
+              disabled={!isConnected || autoScanRunning || pendingCommand !== null}
+            >
+              <Play size={16} style={{ marginRight: 8 }} />
+              {pendingCommand === 'start' ? 'Starting…' : autoScanRunning ? 'Auto Scan Running…' : 'Start Auto Scan'}
+            </Button>
+            <Button
+              variant="danger"
+              size="lg"
+              loading={pendingCommand === 'stop'}
+              onClick={handleStopAutoScan}
+              disabled={!isConnected || !autoScanRunning || pendingCommand !== null}
+            >
+              <Square size={16} style={{ marginRight: 8 }} />
+              {pendingCommand === 'stop' ? 'Stopping…' : 'Stop Auto Scan'}
+            </Button>
+            <span className="text-muted text-sm">
+              {isConnected ? 'Auto scan targets and interval come from scanner_nmap .env' : 'Waiting for backend…'}
+            </span>
+          </div>
+        </Card>
+
         {isScanning && (
           <Card>
             <ScanAnimation label={`Running comprehensive scan on ${input}…`} />
+          </Card>
+        )}
+
+        {(autoScanRunning || pendingCommand === 'start') && (
+          <Card>
+            <ScanAnimation label="Auto Nmap scan running… Results will be saved continuously." />
           </Card>
         )}
 

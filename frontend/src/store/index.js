@@ -19,6 +19,7 @@ export const useStore = create((set, get) => ({
   // ── Auto scan state (persisted in localStorage) ───────────────────────────
   arpAutoScanRunning: loadAutoScanState('arpAutoScanRunning'),
   icmpAutoScanRunning: loadAutoScanState('icmpAutoScanRunning'),
+  nmapAutoScanRunning: loadAutoScanState('nmapAutoScanRunning'),
 
   // ── Change Detection (populated by WS change_event messages) ─────────────
   changeEvents:     [],
@@ -63,6 +64,15 @@ export const useStore = create((set, get) => ({
       console.warn('Failed to save auto scan state to localStorage:', e)
     }
     set({ icmpAutoScanRunning: running })
+  },
+
+  setNmapAutoScanRunning: (running) => {
+    try {
+      localStorage.setItem('nmapAutoScanRunning', running)
+    } catch (e) {
+      console.warn('Failed to save auto scan state to localStorage:', e)
+    }
+    set({ nmapAutoScanRunning: running })
   },
 
   // ── Change event actions ──────────────────────────────────────────────────

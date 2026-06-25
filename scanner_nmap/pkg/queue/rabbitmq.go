@@ -23,6 +23,10 @@ type RabbitMQ struct {
 	config  RabbitMQConfig
 }
 
+func (r *RabbitMQ) Channel() *amqp.Channel {
+	return r.channel
+}
+
 func NewRabbitMQ(config RabbitMQConfig) (*RabbitMQ, error) {
 	conn, err := amqp.Dial(config.URL)
 	if err != nil {

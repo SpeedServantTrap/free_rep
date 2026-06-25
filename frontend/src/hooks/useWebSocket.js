@@ -19,8 +19,16 @@ export function useWebSocket() {
 
     const offMsg = wsClient.on('message', (msg) => {
       if (msg.type === 'response' && msg.response) {
-        // 'started' is just an ack for async long-running scans — keep activeScan alive.
-        if (msg.response.result?.status === 'started') return
+        const activeScan = useStore.getState().activeScan
+        const isManualNmapStartAck =
+          msg.response.result?.status === 'started' &&
+          msg.scanner_service === 'nmap_service' &&
+          activeScan?.scanner_service === 'nmap_service' &&
+          activeScan?.options?.scan_method === 'comprehensive_scan' &&
+          !activeScan?.options?.command
+
+        // Ignore only the async manual Nmap start ack so the manual loading state stays active.
+        if (isManualNmapStartAck) return
         finishScan(msg.response, msg.scanner_service)
       }
       // Real-time change events pushed by the change_detector via RabbitMQ → backend
