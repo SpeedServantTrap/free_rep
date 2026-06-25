@@ -127,10 +127,6 @@ services:
     container_name: nginx-proxy
     ports:
       - "80:80"
-      - "443:443"
-    volumes:
-      - ./frontend/scanner-vniitf.ru+1.pem:/etc/nginx/certs/cert.pem:ro
-      - ./frontend/scanner-vniitf.ru+1-key.pem:/etc/nginx/certs/key.pem:ro
     extra_hosts:
       - "backend-app:host-gateway"
     networks:
