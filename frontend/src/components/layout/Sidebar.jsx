@@ -7,14 +7,14 @@ import { useStore }  from '@/store'
 import { StatusDot } from '@/components/ui'
 
 const SCANNERS = [
-  { to: '/arp',  label: 'ARP Scanner',  Icon: Network,   color: 'var(--green)'  },
-  { to: '/icmp', label: 'ICMP Ping',    Icon: Radio,     color: 'var(--blue)'   },
-  { to: '/nmap', label: 'Nmap Scanner', Icon: Shield,    color: 'var(--purple)' },
+  { to: '/admin/arp',  label: 'ARP Scanner',  Icon: Network,   color: 'var(--green)'  },
+  { to: '/admin/icmp', label: 'ICMP Ping',    Icon: Radio,     color: 'var(--blue)'   },
+  { to: '/admin/nmap', label: 'Nmap Scanner', Icon: Shield,    color: 'var(--purple)' },
 ]
 
 const TOOLS = [
-  { to: '/history', label: 'History', Icon: Clock  },
-  { to: '/search',  label: 'Search',  Icon: Search },
+  { to: '/admin/history', label: 'History', Icon: Clock  },
+  { to: '/',  label: 'Search',  Icon: Search },
 ]
 
 const WS_LABEL = { connected: 'Connected', disconnected: 'Disconnected', error: 'Error' }
@@ -38,7 +38,7 @@ export default function Sidebar() {
       </div>
 
       <div className="sidebar-nav">
-        <NavLink to="/" end className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
+        <NavLink to="/admin" end className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
           <LayoutDashboard size={16} className="nav-item-icon" />
           Dashboard
         </NavLink>
@@ -64,7 +64,7 @@ export default function Sidebar() {
 
         <div className="nav-section-label">Security</div>
         <NavLink
-          to="/changes"
+          to="/admin/changes"
           className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
           onClick={clearNewChanges}
         >

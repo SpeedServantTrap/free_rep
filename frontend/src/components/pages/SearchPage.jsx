@@ -8,7 +8,7 @@ import toast             from 'react-hot-toast'
 export default function SearchPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const returnTo = searchParams.get('returnTo') || '/'
+  const returnTo = searchParams.get('returnTo') || '/admin'
 
   const [results, setResults] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -17,7 +17,7 @@ export default function SearchPage() {
   const [query, setQuery] = useState('')
 
   const backButtonLabel = useMemo(() => {
-    return returnTo === '/' ? 'Back to dashboard' : 'Back'
+    return returnTo === '/admin' ? 'Back to dashboard' : 'Back'
   }, [returnTo])
 
   return (

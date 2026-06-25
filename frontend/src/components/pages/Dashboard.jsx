@@ -5,9 +5,9 @@ import { StatusDot, Badge, Button } from '@/components/ui'
 import { formatDistanceToNow } from 'date-fns'
 
 const SCANNER_TILES = [
-  { to: '/arp',  label: 'ARP Scanner',  Icon: Network,  color: 'green',  desc: 'Discover LAN devices via ARP' },
-  { to: '/icmp', label: 'ICMP Ping',    Icon: Radio,    color: 'blue',   desc: 'Ping hosts and measure loss'  },
-  { to: '/nmap', label: 'Nmap Scanner', Icon: Shield,   color: 'purple', desc: 'Port scan, OS detection'      },
+  { to: '/admin/arp',  label: 'ARP Scanner',  Icon: Network,  color: 'green',  desc: 'Discover LAN devices via ARP' },
+  { to: '/admin/icmp', label: 'ICMP Ping',    Icon: Radio,    color: 'blue',   desc: 'Ping hosts and measure loss'  },
+  { to: '/admin/nmap', label: 'Nmap Scanner', Icon: Shield,   color: 'purple', desc: 'Port scan, OS detection'      },
 ]
 
 const svcLabel = {
@@ -33,7 +33,7 @@ export default function Dashboard() {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => window.open('/search?returnTo=/', '_blank', 'noopener,noreferrer')}
+            onClick={() => window.open('/?returnTo=/admin', '_blank', 'noopener,noreferrer')}
           >
             Open Search
           </Button>

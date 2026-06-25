@@ -11,15 +11,15 @@ import ChangesPage  from './components/pages/ChangesPage'
 export default function App() {
   return (
     <Routes>
-      <Route path="/search" element={<SearchPage />} />
+      <Route path="/" element={<SearchPage />} />
       <Route element={<Layout />}>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/arp" element={<ARPScanner />} />
-        <Route path="/icmp" element={<ICMPScanner />} />
-        <Route path="/nmap" element={<NmapScanner />} />
-        <Route path="/history" element={<HistoryPage />} />
-        <Route path="/changes" element={<ChangesPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="/admin" element={<Dashboard />} />
+        <Route path="/admin/arp" element={<ARPScanner />} />
+        <Route path="/admin/icmp" element={<ICMPScanner />} />
+        <Route path="/admin/nmap" element={<NmapScanner />} />
+        <Route path="/admin/history" element={<HistoryPage />} />
+        <Route path="/admin/changes" element={<ChangesPage />} />
+        <Route path="*" element={<Navigate to="/admin" replace />} />
       </Route>
     </Routes>
   )
