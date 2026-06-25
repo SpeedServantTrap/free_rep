@@ -722,7 +722,7 @@ func (r *Repository) SaveOrUpdateL3Device(device *models.L3DeviceNew) error {
 
 	// Try to find existing device
 	var existing models.L3DeviceNew
-	err := r.db.ICMPCollection().FindOne(ctx, bson.M{"_id": device.ID}).Decode(&existing)
+	err := r.db.L3DevicesCollection().FindOne(ctx, bson.M{"_id": device.ID}).Decode(&existing)
 
 	if err == nil {
 		// Device exists, update it with accumulated data
@@ -756,16 +756,16 @@ func (r *Repository) SaveOrUpdateL3Device(device *models.L3DeviceNew) error {
 			update["$set"].(bson.M)["udp_open_ports"] = uniquePorts
 		}
 
-		// Update OS if provided (and not just "-")
-		if device.OS != "" && device.OS != "-" {
-			if existing.OS == "-" || existing.OS == "" {
+		// Update OS if provided (and not just "-" or placeholder)
+		if device.OS != "" && device.OS != "-" && device.OS != "unknown" {
+			if existing.OS == "-" || existing.OS == "" || existing.OS == "unknown" {
 				update["$set"].(bson.M)["os"] = device.OS
 			}
 		}
 
-		// Update DNS if provided (and not just "-")
-		if device.DNS != "" && device.DNS != "-" {
-			if existing.DNS == "-" || existing.DNS == "" {
+		// Update DNS if provided (and not just "-" or placeholder)
+		if device.DNS != "" && device.DNS != "-" && device.DNS != "unknown" {
+			if existing.DNS == "-" || existing.DNS == "" || existing.DNS == "unknown" {
 				update["$set"].(bson.M)["dns"] = device.DNS
 			}
 		}
@@ -801,7 +801,7 @@ func (r *Repository) SaveOrUpdateL3Device(device *models.L3DeviceNew) error {
 			update["$set"].(bson.M)["scanner_types"] = uniqueScannerTypes
 		}
 
-		_, err = r.db.ICMPCollection().UpdateOne(ctx, bson.M{"_id": device.ID}, update)
+		_, err = r.db.L3DevicesCollection().UpdateOne(ctx, bson.M{"_id": device.ID}, update)
 		if err != nil {
 			log.Printf("Error updating L3 device: %v", err)
 			return err
@@ -820,7 +820,7 @@ func (r *Repository) SaveOrUpdateL3Device(device *models.L3DeviceNew) error {
 		if device.DNS == "" {
 			device.DNS = "-"
 		}
-		_, err = r.db.ICMPCollection().InsertOne(ctx, device)
+		_, err = r.db.L3DevicesCollection().InsertOne(ctx, device)
 		if err != nil {
 			log.Printf("Error inserting L3 device: %v", err)
 			return err
@@ -874,7 +874,7 @@ func (r *Repository) DeleteAllL3Devices() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	result, err := r.db.ICMPCollection().DeleteMany(ctx, bson.D{})
+	result, err := r.db.L3DevicesCollection().DeleteMany(ctx, bson.D{})
 	if err != nil {
 		log.Printf("Error deleting L3 devices: %v", err)
 		return err

@@ -19,7 +19,9 @@ export function useWebSocket() {
 
     const offMsg = wsClient.on('message', (msg) => {
       if (msg.type === 'response' && msg.response) {
-        finishScan(msg.response)
+        // 'started' is just an ack for async long-running scans — keep activeScan alive.
+        if (msg.response.result?.status === 'started') return
+        finishScan(msg.response, msg.scanner_service)
       }
       // Real-time change events pushed by the change_detector via RabbitMQ → backend
       if (msg.type === 'change_event' && msg.change) {

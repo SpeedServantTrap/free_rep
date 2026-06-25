@@ -111,6 +111,37 @@ type NmapHostDiscoveryRequest struct {
 	ScanMethod string `json:"scan_method"`
 }
 
+type NmapComprehensiveRequest struct {
+	TaskID     string `json:"task_id"`
+	Input      string `json:"input"`
+	ScanMethod string `json:"scan_method"`
+}
+
+type NmapComprehensiveTargetResult struct {
+	Host            string               `json:"host"`
+	TCPPortInfo     []NmapPortTcpUdpInfo `json:"tcp_port_info,omitempty"`
+	UDPPortInfo     []NmapPortTcpUdpInfo `json:"udp_port_info,omitempty"`
+	OSName          string               `json:"os_name,omitempty"`
+	OSAccuracy      int                  `json:"os_accuracy,omitempty"`
+	OSVendor        string               `json:"os_vendor,omitempty"`
+	OSFamily        string               `json:"os_family,omitempty"`
+	OSType          string               `json:"os_type,omitempty"`
+	DNS             string               `json:"dns,omitempty"`
+	DiscoveryStatus string               `json:"discovery_status,omitempty"`
+	DiscoveryReason string               `json:"discovery_reason,omitempty"`
+	TCPError        string               `json:"tcp_error,omitempty"`
+	UDPError        string               `json:"udp_error,omitempty"`
+	OSError         string               `json:"os_error,omitempty"`
+	DNSError        string               `json:"dns_error,omitempty"`
+}
+
+type NmapComprehensiveResponse struct {
+	TaskID  string                        `json:"task_id"`
+	Results []NmapComprehensiveTargetResult `json:"results"`
+	Status  string                        `json:"status"`
+	Error   string                        `json:"error,omitempty"`
+}
+
 type NmapHostDiscoveryResponse struct {
 	TaskID    string `json:"task_id"`
 	Host      string `json:"host"`

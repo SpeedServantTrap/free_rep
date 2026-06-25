@@ -54,6 +54,17 @@ func (rs *RequestService) processNmapRequest(options any) *models.Response {
 	}
 
 	switch {
+	case scanType.ScanMethod == "comprehensive_scan":
+		var comprehensiveReq models.NmapComprehensiveRequest
+		if err := json.Unmarshal(optionsJSON, &comprehensiveReq); err != nil {
+			log.Printf("Failed to unmarshal comprehensive Nmap request: %v", err)
+			return &models.Response{
+				TaskID: "error",
+				Result: map[string]string{"error": "invalid comprehensive Nmap request"},
+			}
+		}
+		return &models.Response{TaskID: comprehensiveReq.TaskID, Result: comprehensiveReq}
+
 	case scanType.ScannerType == "tcp_udp_scan" || scanType.ScanMethod == "tcp_udp_scan":
 		var tcpUdpReq models.NmapTcpUdpRequest
 		if err := json.Unmarshal(optionsJSON, &tcpUdpReq); err != nil {

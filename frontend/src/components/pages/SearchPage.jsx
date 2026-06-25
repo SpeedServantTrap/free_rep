@@ -385,6 +385,7 @@ function L3DeviceCard({ device, onFillQuery }) {
   const hasScanTimes = device.scan_times?.length > 0
   const hasScanners = device.scanner_types?.length > 0
   const [showAllScanTimes, setShowAllScanTimes] = useState(false)
+  const [expandedBannerPort, setExpandedBannerPort] = useState(null)
 
   // Use 'id' field (IP address) or fallback to 'ip' or '_id'
   const displayId = device.id || device.ip || device._id
@@ -514,28 +515,60 @@ function L3DeviceCard({ device, onFillQuery }) {
             <Server size={20} />
             TCP Banners by Port
           </div>
-          <div style={{ display: 'grid', gap: 10 }}>
-            {bannerEntries.map(([port, banner]) => (
-              <div key={port} style={{
-                padding: 12,
-                background: 'rgba(234, 179, 8, 0.2)',
-                borderRadius: 6,
-                border: '1px solid rgba(234, 179, 8, 0.4)'
-              }}>
-                <div style={{ fontSize: 12, color: '#fde68a', marginBottom: 6, fontFamily: 'monospace', fontWeight: 700 }}>
-                  Port {port}
-                </div>
-                <pre style={{
-                  fontSize: 13,
-                  color: '#fef08a',
-                  margin: 0,
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                }}>
-                  {banner}
-                </pre>
-              </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+            {bannerEntries.map(([port]) => (
+              <button
+                key={port}
+                type="button"
+                onClick={() => setExpandedBannerPort((prev) => (prev === port ? null : port))}
+                style={{
+                  fontSize: 12,
+                  fontFamily: 'monospace',
+                  fontWeight: 700,
+                  padding: '6px 10px',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  border: expandedBannerPort === port
+                    ? '1px solid rgba(250, 204, 21, 0.9)'
+                    : '1px solid rgba(234, 179, 8, 0.45)',
+                  background: expandedBannerPort === port
+                    ? 'rgba(234, 179, 8, 0.4)'
+                    : 'rgba(234, 179, 8, 0.2)',
+                  color: '#fef08a'
+                }}
+              >
+                TCP:{port}
+              </button>
             ))}
+          </div>
+          {expandedBannerPort && (
+            <div style={{
+              padding: 12,
+              background: 'rgba(234, 179, 8, 0.2)',
+              borderRadius: 6,
+              border: '1px solid rgba(234, 179, 8, 0.4)'
+            }}>
+              <div style={{ fontSize: 12, color: '#fde68a', marginBottom: 6, fontFamily: 'monospace', fontWeight: 700 }}>
+                Port {expandedBannerPort}
+              </div>
+              <pre style={{
+                fontSize: 13,
+                color: '#fef08a',
+                margin: 0,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}>
+                {device.tcp_banners?.[expandedBannerPort]}
+              </pre>
+            </div>
+          )}
+          {!expandedBannerPort && (
+            <div style={{ fontSize: 12, color: '#fde68a' }}>
+              Нажмите на порт, чтобы раскрыть баннер.
+            </div>
+          )}
+          <div style={{ marginTop: 6, fontSize: 12, color: '#fde68a', opacity: 0.9 }}>
+            Порты: {bannerEntries.map(([port]) => port).join(',')}
           </div>
         </div>
       )}

@@ -29,11 +29,11 @@ export const useStore = create((set, get) => ({
   startScan: (scanner_service, options) =>
     set({ activeScan: { scanner_service, options, startedAt: Date.now() }, latestResult: null }),
 
-  finishScan: (response) => {
+  finishScan: (response, broadcastScannerService) => {
     const active = get().activeScan
     const entry  = {
       ...response,
-      scanner_service: active?.scanner_service ?? 'unknown',
+      scanner_service: broadcastScannerService || active?.scanner_service || 'unknown',
       options:         active?.options ?? {},
       receivedAt:      Date.now(),
     }

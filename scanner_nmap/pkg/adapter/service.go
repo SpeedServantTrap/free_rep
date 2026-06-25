@@ -35,7 +35,8 @@ func processMessages(ctx context.Context, msgs <-chan queue.Delivery, rabbitMQ *
 			if !ok {
 				return nil
 			}
-			handler.HandleMessage(ctx, msg, rabbitMQ, log)
+			// Run in goroutine so long scans don't block new messages.
+			go handler.HandleMessage(ctx, msg, rabbitMQ, log)
 
 		case <-ctx.Done():
 			return nil

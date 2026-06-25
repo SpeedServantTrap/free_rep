@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	rabbitmq "backend/internal/infrastructure/messaging"
+	"sync"
 	"time"
 )
 
@@ -14,6 +15,15 @@ type App struct {
 	responseService  *services.ResponseService
 	publisherService *services.PublisherService
 	historyService   *services.HistoryService
+	broadcastFn      func(resp *models.Response, scannerService string)
+	autoTCPMu        sync.Mutex
+	autoTCPSeen      map[string]struct{}
+}
+
+// SetBroadcastFn wires a function that pushes results to all WS clients.
+// Called once from main after the WS hub is available.
+func (a *App) SetBroadcastFn(fn func(resp *models.Response, scannerService string)) {
+	a.broadcastFn = fn
 }
 
 func NewApp(publisher *rabbitmq.RPCScannerPublisher, repo services.RepositoryInterface) *App {
@@ -27,6 +37,7 @@ func NewApp(publisher *rabbitmq.RPCScannerPublisher, repo services.RepositoryInt
 		responseService:  responseService,
 		publisherService: publisherService,
 		historyService:   historyService,
+		autoTCPSeen:      make(map[string]struct{}),
 	}
 
 	publisherService.SetResponseCallback(func(response *models.Response) {
@@ -47,6 +58,8 @@ func (a *App) ProcessRequest(req *models.Request) *models.Response {
 			} else if nmapReq, ok := response.Result.(models.NmapOsDetectionRequest); ok {
 				a.historyService.CacheRequest(nmapReq.TaskID, nmapReq)
 			} else if nmapReq, ok := response.Result.(models.NmapHostDiscoveryRequest); ok {
+				a.historyService.CacheRequest(nmapReq.TaskID, nmapReq)
+			} else if nmapReq, ok := response.Result.(models.NmapComprehensiveRequest); ok {
 				a.historyService.CacheRequest(nmapReq.TaskID, nmapReq)
 			}
 			return a.publisherService.PublishNmapRequest(response.Result)
@@ -83,7 +96,29 @@ func (a *App) ProcessResponse(response *models.Response) {
 
 	nmapResp, ok := response.Result.(models.NmapTcpUdpResponse)
 	if !ok {
+		compResp, compOk := response.Result.(models.NmapComprehensiveResponse)
+		if !compOk {
+			a.responseService.ProcessResponse(response)
+			return
+		}
+
 		a.responseService.ProcessResponse(response)
+
+		for _, result := range compResp.Results {
+			go a.triggerTCPBannerScansFromNmap(result.Host, compResp.TaskID, extractOpenTCPPorts(models.NmapTcpUdpResponse{
+				TaskID:   compResp.TaskID,
+				Host:     result.Host,
+				PortInfo: result.TCPPortInfo,
+			}))
+		}
+
+		if compResp.Status != "completed" && compResp.Status != "failed" {
+			return
+		}
+
+		if a.broadcastFn != nil {
+			a.broadcastFn(response, "nmap_service")
+		}
 		return
 	}
 
@@ -106,6 +141,15 @@ func (a *App) triggerTCPBannerScansFromNmap(host, sourceTaskID string, ports []s
 	log.Printf("[Auto-TCP] Triggering TCP banner scans for host %s, ports=%v (source task=%s)", host, ports, sourceTaskID)
 
 	for _, port := range ports {
+		seenKey := sourceTaskID + "|" + host + "|" + port
+		a.autoTCPMu.Lock()
+		if _, exists := a.autoTCPSeen[seenKey]; exists {
+			a.autoTCPMu.Unlock()
+			continue
+		}
+		a.autoTCPSeen[seenKey] = struct{}{}
+		a.autoTCPMu.Unlock()
+
 		taskID := fmt.Sprintf("%s-tcp-banner-%s-%d", sourceTaskID, port, time.Now().UnixNano())
 		tcpReq := models.TCPRequest{
 			TaskID: taskID,

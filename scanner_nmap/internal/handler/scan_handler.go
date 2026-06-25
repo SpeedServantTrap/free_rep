@@ -29,6 +29,36 @@ func HandleMessage(ctx context.Context, msg queue.Delivery, rabbitMQ *queue.Rabb
 	log.Infof("Scan method: %s, Scanner type: %s", scanType.ScanMethod, scanType.ScannerType)
 
 	switch {
+	case scanType.ScanMethod == "comprehensive_scan":
+		var comprehensiveRequest domain.ComprehensiveScanRequest
+		if err := json.Unmarshal(msg.Body, &comprehensiveRequest); err != nil {
+			log.Errorf("Failed to unmarshal comprehensive request: %v", err)
+			return
+		}
+		log.Infof("Processing comprehensive scan for task %s input %s", comprehensiveRequest.TaskID, comprehensiveRequest.Input)
+		req, err := usecases.ComprehensiveScannerStream(ctx, comprehensiveRequest, func(target domain.ComprehensiveTargetResult) {
+			partial := domain.ComprehensiveScanResponse{
+				TaskID:  comprehensiveRequest.TaskID,
+				Results: []domain.ComprehensiveTargetResult{target},
+				Status:  "partial",
+			}
+			body, marshalErr := json.Marshal(partial)
+			if marshalErr != nil {
+				log.Errorf("Failed to marshal partial comprehensive response: %v", marshalErr)
+				return
+			}
+			if sendErr := rabbitMQ.SendResponse(msg.ReplyTo, msg.CorrelationId, body); sendErr != nil {
+				log.Errorf("Failed to send partial comprehensive response: %v", sendErr)
+			}
+		})
+		if err != nil {
+			log.Errorf("Failed to run comprehensive scan: %v", err)
+			req.TaskID = comprehensiveRequest.TaskID
+			req.Status = "failed"
+			req.Error = err.Error()
+		}
+		sendResponse(rabbitMQ, msg, req, err, log)
+
 	case scanType.ScanMethod == "tcp_udp_scan" || scanType.ScannerType == "tcp_scan" || scanType.ScannerType == "udp_scan":
 		var tcpUdpRequest domain.ScanTcpUdpRequest
 		if err := json.Unmarshal(msg.Body, &tcpUdpRequest); err != nil {
@@ -81,7 +111,7 @@ func HandleMessage(ctx context.Context, msg queue.Delivery, rabbitMQ *queue.Rabb
 	log.Infof("Scan completed")
 }
 
-func sendResponse[T domain.ScanTcpUdpResponse | domain.OsDetectionResponse | domain.HostDiscoveryResponse](
+func sendResponse[T domain.ScanTcpUdpResponse | domain.OsDetectionResponse | domain.HostDiscoveryResponse | domain.ComprehensiveScanResponse](
 	rabbitMQ *queue.RabbitMQ,
 	msg queue.Delivery,
 	req T,
@@ -89,6 +119,28 @@ func sendResponse[T domain.ScanTcpUdpResponse | domain.OsDetectionResponse | dom
 	log logger.Logger,
 ) {
 	switch r := any(req).(type) {
+	case domain.ComprehensiveScanResponse:
+		response := domain.ComprehensiveScanResponse{
+			TaskID:  r.TaskID,
+			Results: r.Results,
+			Status:  "completed",
+			Error:   r.Error,
+		}
+		if err != nil {
+			response.Status = "failed"
+			if response.Error == "" {
+				response.Error = err.Error()
+			}
+			log.Errorf("Comprehensive scan failed: %v", err)
+		} else {
+			log.Infof("Comprehensive scan completed for task %s", r.TaskID)
+		}
+
+		body, _ := json.Marshal(response)
+		if err := rabbitMQ.SendResponse(msg.ReplyTo, msg.CorrelationId, body); err != nil {
+			log.Errorf("Failed to send comprehensive scan response: %v", err)
+		}
+
 	case domain.ScanTcpUdpResponse:
 		response := domain.ScanTcpUdpResponse{
 			TaskID:   r.TaskID,

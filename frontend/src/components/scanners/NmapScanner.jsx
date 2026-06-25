@@ -6,20 +6,9 @@ import { Button, Badge, Card, EmptyState, ScanAnimation } from '@/components/ui'
 
 const SERVICE = 'nmap_service'
 
-const METHODS = [
-  { id: 'tcp_udp_scan',   label: 'TCP / UDP Scan'   },
-  { id: 'os_detection',   label: 'OS Detection'     },
-  { id: 'host_discovery', label: 'Host Discovery'   },
-]
-
-const SCANNER_TYPES = ['TCP', 'UDP']
-
 export default function NmapScanner() {
-  const [method,      setMethod]      = useState('tcp_udp_scan')
-  const [ip,          setIp]          = useState('')
-  const [ports,       setPorts]       = useState('1-1024')
-  const [scannerType, setScannerType] = useState('TCP')
-  const [copied,      setCopied]      = useState(false)
+  const [input,  setInput]  = useState('')
+  const [copied, setCopied] = useState(false)
 
   const send         = useSend()
   const activeScan   = useStore((s) => s.activeScan)
@@ -30,12 +19,11 @@ export default function NmapScanner() {
   const isConnected = wsStatus === 'connected'
   const result     = latestResult?.scanner_service === SERVICE ? latestResult : null
   const scanResult = result?.result
-  const usedMethod = result?.options?.scan_method
 
   const handleScan = useCallback(() => {
-    if (!ip || isScanning) return
-    send(SERVICE, { scan_method: method, ip, ports, scanner_type: scannerType })
-  }, [method, ip, ports, scannerType, isScanning, send])
+    if (!input || isScanning) return
+    send(SERVICE, { scan_method: 'comprehensive_scan', input })
+  }, [input, isScanning, send])
 
   const handleKey = (e) => {
     if (e.ctrlKey && e.key === 'Enter') handleScan()
@@ -52,46 +40,24 @@ export default function NmapScanner() {
       <div className="page-header">
         <div>
           <h1 className="page-title"><Shield size={22} /> Nmap Scanner</h1>
-          <p className="page-subtitle">Port scanning, OS detection and host discovery powered by Nmap</p>
+          <p className="page-subtitle">Unified TCP 65k, UDP 65k, OS and DNS scan for one IP, comma-separated IPs or CIDR</p>
         </div>
       </div>
 
       <div style={{ display: 'grid', gap: 20 }}>
         <Card title="Scan Configuration">
-          <div className="tabs" style={{ marginBottom: 20 }}>
-            {METHODS.map((m) => (
-              <button key={m.id} className={`tab${method === m.id ? ' active' : ''}`} onClick={() => setMethod(m.id)}>
-                {m.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="grid-2">
-            <div className="form-group">
-              <label>Target IP / CIDR</label>
-              <input value={ip} onChange={(e) => setIp(e.target.value)} placeholder="192.168.1.1 or 192.168.1.0/24" />
-            </div>
-
-            {method === 'tcp_udp_scan' && (
-              <div className="form-group">
-                <label>Port Range</label>
-                <input value={ports} onChange={(e) => setPorts(e.target.value)} placeholder="1-1024, 80,443,8080" />
-              </div>
-            )}
-
-            {method === 'tcp_udp_scan' && (
-              <div className="form-group">
-                <label>Scan Type</label>
-                <select value={scannerType} onChange={(e) => setScannerType(e.target.value)}>
-                  {SCANNER_TYPES.map((t) => <option key={t}>{t}</option>)}
-                </select>
-              </div>
-            )}
+          <div className="form-group">
+            <label>Targets</label>
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="192.168.1.10 or 192.168.1.10,192.168.1.20 or 192.168.1.0/24"
+            />
           </div>
 
           <div style={{ marginTop: 16, display: 'flex', gap: 10, alignItems: 'center' }}>
-            <Button variant="primary" size="lg" loading={isScanning} onClick={handleScan} disabled={!ip || !isConnected}>
-              {isScanning ? 'Scanning…' : `Run ${METHODS.find(m => m.id === method)?.label}`}
+            <Button variant="primary" size="lg" loading={isScanning} onClick={handleScan} disabled={!input || !isConnected}>
+              {isScanning ? 'Scanning…' : 'Run Comprehensive Scan'}
             </Button>
             <span className="text-muted text-sm">{isConnected ? 'Ctrl + Enter' : 'Waiting for backend…'}</span>
           </div>
@@ -99,7 +65,7 @@ export default function NmapScanner() {
 
         {isScanning && (
           <Card>
-            <ScanAnimation label={`Running ${METHODS.find(m => m.id === method)?.label} on ${ip}…`} />
+            <ScanAnimation label={`Running comprehensive scan on ${input}…`} />
           </Card>
         )}
 
@@ -118,12 +84,7 @@ export default function NmapScanner() {
             {scanResult.error ? (
               <div className="result-error">Error: {scanResult.error}</div>
             ) : (
-              <>
-                {usedMethod === 'tcp_udp_scan' && <TcpUdpResult r={scanResult} />}
-                {usedMethod === 'os_detection' && <OsDetectionResult r={scanResult} />}
-                {usedMethod === 'host_discovery' && <HostDiscoveryResult r={scanResult} />}
-                {!usedMethod && <TcpUdpResult r={scanResult} />}
-              </>
+              <ComprehensiveResult r={scanResult} />
             )}
           </div>
         )}
@@ -132,105 +93,123 @@ export default function NmapScanner() {
   )
 }
 
-function TcpUdpResult({ r }) {
-  if (!r.port_info?.length) return <EmptyState title="No ports found" />
+function ComprehensiveResult({ r }) {
+  if (!r.results?.length) return <EmptyState title="No hosts found" />
+
+  return (
+    <div style={{ display: 'grid', gap: 16 }}>
+      <div className="result-stats">
+        <div className="result-stat">
+          <div className="result-stat-value">{r.results.length}</div>
+          <div className="result-stat-label">Hosts</div>
+        </div>
+        <div className="result-stat">
+          <div className="result-stat-value">{countOpenPorts(r.results, 'tcp')}</div>
+          <div className="result-stat-label">Open TCP</div>
+        </div>
+        <div className="result-stat">
+          <div className="result-stat-value">{countOpenPorts(r.results, 'udp')}</div>
+          <div className="result-stat-label">Open UDP</div>
+        </div>
+      </div>
+
+      {r.results.map((target, index) => {
+        const tcpPorts = flattenPorts(target.tcp_port_info)
+        const udpPorts = flattenPorts(target.udp_port_info)
+
+        return (
+          <Card key={`${target.host}-${index}`} title={target.host || `Target ${index + 1}`}>
+            <div className="os-result-grid" style={{ marginBottom: 16 }}>
+              {[
+                { k: 'DNS', v: target.dns || '—' },
+                { k: 'Discovery', v: target.discovery_status || '—' },
+                { k: 'Reason', v: target.discovery_reason || '—' },
+                { k: 'OS Name', v: target.os_name || '—' },
+                { k: 'Vendor', v: target.os_vendor || '—' },
+                { k: 'Accuracy', v: target.os_accuracy ? `${target.os_accuracy}%` : '—' },
+              ].map(({ k, v }) => (
+                <div key={k} className="os-result-item">
+                  <div className="os-result-key">{k}</div>
+                  <div className="os-result-value">{v}</div>
+                </div>
+              ))}
+            </div>
+
+            {(target.tcp_error || target.udp_error || target.os_error || target.dns_error) && (
+              <div className="result-error" style={{ marginBottom: 16 }}>
+                {[target.tcp_error, target.udp_error, target.os_error, target.dns_error].filter(Boolean).join(' · ')}
+              </div>
+            )}
+
+            <PortTable title="TCP Ports" ports={tcpPorts} emptyTitle="No TCP ports found" />
+            <PortTable title="UDP Ports" ports={udpPorts} emptyTitle="No UDP ports found" />
+          </Card>
+        )
+      })}
+    </div>
+  )
+}
+
+function PortTable({ title, ports, emptyTitle }) {
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <strong>{title}</strong>
+        <Badge>{ports.length}</Badge>
+      </div>
+      {!ports.length ? (
+        <EmptyState title={emptyTitle} />
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Port</th>
+              <th>Protocol</th>
+              <th>State</th>
+              <th>Service</th>
+            </tr></thead>
+            <tbody>
+              {ports.map((port, index) => (
+                <tr key={`${port.protocol}-${port.port}-${index}`}>
+                  <td className="td-mono" style={{ color: isOpenState(port.state) ? 'var(--green)' : undefined }}>{port.port}</td>
+                  <td className="td-mono td-muted">{port.protocol}</td>
+                  <td><Badge>{port.state}</Badge></td>
+                  <td className="td-muted">{port.serviceName}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function flattenPorts(portInfo) {
   const ports = []
-  r.port_info.forEach((info) => {
-    info.all_ports?.forEach((port, i) => {
+
+  portInfo?.forEach((info) => {
+    info.all_ports?.forEach((port, index) => {
       ports.push({
         port,
-        protocol:    info.protocols?.[i]    ?? '—',
-        state:       info.state?.[i]        ?? '—',
-        serviceName: info.service_name?.[i] ?? '—',
+        protocol: info.protocols?.[index] ?? '—',
+        state: info.state?.[index] ?? '—',
+        serviceName: info.service_name?.[index] ?? '—',
       })
     })
   })
 
-  return (
-    <>
-      <div className="result-stats">
-        <div className="result-stat">
-          <div className="result-stat-value">{r.host || '—'}</div>
-          <div className="result-stat-label">Host</div>
-        </div>
-        <div className="result-stat">
-          <div className="result-stat-value">{ports.length}</div>
-          <div className="result-stat-label">Ports</div>
-        </div>
-        <div className="result-stat">
-          <div className="result-stat-value" style={{ color: 'var(--green)' }}>
-            {ports.filter(p => p.state === 'open').length}
-          </div>
-          <div className="result-stat-label">Open</div>
-        </div>
-      </div>
-      <div className="table-wrap">
-        <table>
-          <thead><tr>
-            <th>Port</th>
-            <th>Protocol</th>
-            <th>State</th>
-            <th>Service</th>
-          </tr></thead>
-          <tbody>
-            {ports.map((p, i) => (
-              <tr key={i}>
-                <td className="td-mono" style={{ color: p.state === 'open' ? 'var(--green)' : undefined }}>{p.port}</td>
-                <td className="td-mono td-muted">{p.protocol}</td>
-                <td><Badge>{p.state}</Badge></td>
-                <td className="td-muted">{p.serviceName}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </>
-  )
+  return ports
 }
 
-function OsDetectionResult({ r }) {
-  const accuracy = r.accuracy ?? 0
-  return (
-    <div className="os-result-grid">
-      {[
-        { k: 'Host',     v: r.host     || '—' },
-        { k: 'OS Name',  v: r.name     || '—' },
-        { k: 'Vendor',   v: r.vendor   || '—' },
-        { k: 'Family',   v: r.family   || '—' },
-        { k: 'Type',     v: r.type     || '—' },
-        { k: 'Accuracy', v: `${accuracy}%`    },
-      ].map(({ k, v }) => (
-        <div key={k} className="os-result-item">
-          <div className="os-result-key">{k}</div>
-          <div className="os-result-value">{v}</div>
-          {k === 'Accuracy' && (
-            <div className="accuracy-bar">
-              <div className="accuracy-fill" style={{ width: `${accuracy}%` }} />
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  )
+function countOpenPorts(results, protocol) {
+  return results.reduce((total, target) => {
+    const list = protocol === 'tcp' ? flattenPorts(target.tcp_port_info) : flattenPorts(target.udp_port_info)
+    return total + list.filter((port) => isOpenState(port.state)).length
+  }, 0)
 }
 
-function HostDiscoveryResult({ r }) {
-  return (
-    <div className="os-result-grid">
-      {[
-        { k: 'Host',        v: r.host       || '—' },
-        { k: 'DNS',         v: r.dns        || '—' },
-        { k: 'Hosts Up',    v: r.host_up ?? 0 },
-        { k: 'Total Hosts', v: r.host_total ?? 0 },
-        { k: 'Reason',      v: r.reason     || '—' },
-        { k: 'Status',      v: r.status     || '—' },
-      ].map(({ k, v }) => (
-        <div key={k} className="os-result-item">
-          <div className="os-result-key">{k}</div>
-          <div className="os-result-value">{String(v)}</div>
-        </div>
-      ))}
-    </div>
-  )
+function isOpenState(state) {
+  return state === 'open' || state === 'open|filtered'
 }
 

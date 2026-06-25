@@ -134,6 +134,16 @@ func main() {
 	searchHandler.SetApp(app)
 	log.Println("[Main] RabbitMQ connected — WebSocket scan endpoint is now active")
 
+	// Broadcast comprehensive Nmap results to all WS clients when scan finishes.
+	app.SetBroadcastFn(func(resp *models.Response, scannerService string) {
+		wb.GetHub().Broadcast(wb.Message{
+			Type:           "response",
+			Resp:           resp,
+			ScannerService: scannerService,
+		})
+		log.Printf("[Broadcast] %s result for task %s sent to all WS clients", scannerService, resp.TaskID)
+	})
+
 	// ── Change Events consumer ────────────────────────────────────────────────
 	// Consumes from the `change_events` queue (published by the Python
 	// change_detector service), saves each event to MongoDB and broadcasts

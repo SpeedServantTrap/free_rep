@@ -1,6 +1,8 @@
 package websocket
 
-import "sync"
+import (
+	"sync"
+)
 
 // Hub maintains the set of all active WebSocket clients and allows
 // broadcasting messages to every one of them.

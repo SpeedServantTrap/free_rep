@@ -23,10 +23,11 @@ func NewWSHandler(app *api.App) *WSHandler {
 }
 
 type Message struct {
-	Type   string               `json:"type"`
-	Req    *models.Request      `json:"request,omitempty"`
-	Resp   *models.Response     `json:"response,omitempty"`
-	Change *models.ChangeEvent  `json:"change,omitempty"`
+	Type           string               `json:"type"`
+	Req            *models.Request      `json:"request,omitempty"`
+	Resp           *models.Response     `json:"response,omitempty"`
+	Change         *models.ChangeEvent  `json:"change,omitempty"`
+	ScannerService string               `json:"scanner_service,omitempty"`
 }
 
 type Client struct {
@@ -83,8 +84,9 @@ func (c *Client) readPump() {
 			response := c.processRequest(msg.Req)
 
 			c.send <- Message{
-				Type: "response",
-				Resp: response,
+				Type:           "response",
+				Resp:           response,
+				ScannerService: msg.Req.ScannerService,
 			}
 		}
 	}
@@ -226,6 +228,7 @@ func (c *Client) processNmapRequest(options any, taskID string) *models.Response
 	var nmapOpts struct {
 		ScanMethod  string `json:"scan_method"`
 		IP          string `json:"ip"`
+		Input       string `json:"input"`
 		Ports       string `json:"ports"`
 		ScannerType string `json:"scanner_type"`
 	}
@@ -242,6 +245,46 @@ func (c *Client) processNmapRequest(options any, taskID string) *models.Response
 		nmapOpts.ScanMethod, nmapOpts.IP, nmapOpts.Ports, nmapOpts.ScannerType)
 
 	switch nmapOpts.ScanMethod {
+	case "comprehensive_scan":
+		if nmapOpts.Input == "" {
+			return &models.Response{
+				TaskID: taskID,
+				Result: map[string]string{"error": "input is required for comprehensive scan"},
+			}
+		}
+
+		nmapRequest := models.NmapComprehensiveRequest{
+			TaskID:     taskID,
+			Input:      nmapOpts.Input,
+			ScanMethod: "comprehensive_scan",
+		}
+
+		log.Printf("Launching async NmapComprehensiveRequest: task=%s input=%s", taskID, nmapOpts.Input)
+
+		// Fire the scan in a goroutine so readPump is not blocked.
+		// When the scan finishes, ProcessResponse broadcasts via Hub.
+		go func() {
+			resp := c.app.ProcessRequest(&models.Request{
+				ScannerService: "nmap_service",
+				Options:        nmapRequest,
+			})
+			// On error (timeout / network failure) notify only this client.
+			if resp != nil {
+				if errRes, ok := resp.Result.(map[string]string); ok && errRes["error"] != "" {
+					select {
+					case c.send <- Message{Type: "response", Resp: resp, ScannerService: "nmap_service"}:
+					default:
+					}
+				}
+			}
+		}()
+
+		// Return "started" immediately so the UI shows scanning state.
+		return &models.Response{
+			TaskID: taskID,
+			Result: map[string]string{"status": "started"},
+		}
+
 	case "tcp_udp_scan":
 		if nmapOpts.IP == "" {
 			return &models.Response{
@@ -259,7 +302,10 @@ func (c *Client) processNmapRequest(options any, taskID string) *models.Response
 		}
 
 		log.Printf("Created NmapTcpUdpRequest: %+v", nmapRequest)
-		return c.app.PublishNmapRequest(nmapRequest)
+		return c.app.ProcessRequest(&models.Request{
+			ScannerService: "nmap_service",
+			Options:        nmapRequest,
+		})
 
 	case "os_detection":
 		if nmapOpts.IP == "" {
@@ -276,7 +322,10 @@ func (c *Client) processNmapRequest(options any, taskID string) *models.Response
 		}
 
 		log.Printf("Created NmapOsDetectionRequest: %+v", nmapRequest)
-		return c.app.PublishNmapRequest(nmapRequest)
+		return c.app.ProcessRequest(&models.Request{
+			ScannerService: "nmap_service",
+			Options:        nmapRequest,
+		})
 
 	case "host_discovery":
 		if nmapOpts.IP == "" {
@@ -293,7 +342,10 @@ func (c *Client) processNmapRequest(options any, taskID string) *models.Response
 		}
 
 		log.Printf("Created NmapHostDiscoveryRequest: %+v", nmapRequest)
-		return c.app.PublishNmapRequest(nmapRequest)
+		return c.app.ProcessRequest(&models.Request{
+			ScannerService: "nmap_service",
+			Options:        nmapRequest,
+		})
 
 	default:
 		return &models.Response{

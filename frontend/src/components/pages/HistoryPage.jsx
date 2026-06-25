@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Clock, Trash2, RefreshCw, ChevronDown, ChevronRight, Network, Radio, Shield, Terminal } from 'lucide-react'
+import { Clock, Trash2, RefreshCw, ChevronDown, ChevronRight, Network, Radio, Shield, Terminal, Copy, Check } from 'lucide-react'
 import { useHistory }        from '@/hooks/useHistory'
 import { Button, Badge, EmptyState, Spinner } from '@/components/ui'
 import { formatDistanceToNow, format } from 'date-fns'
@@ -69,6 +69,7 @@ function HistoryShell({ type, title, children, limit = 50 }) {
 function ARPHistory() {
   const [devices, setDevices] = useState([])
   const [loading, setLoading] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     setLoading(true)
@@ -101,10 +102,53 @@ function ARPHistory() {
       ) : !devices?.length ? (
         <EmptyState title="No L2 devices" description="Run an ARP scan to populate L2 devices" />
       ) : (
-        <div className="card" style={{ padding: 0 }}>
-          {devices.map((device) => <L2DeviceRow key={device.id} device={device} />)}
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 340px', gap: 12, alignItems: 'start' }}>
+          <div className="card" style={{ padding: 0 }}>
+            {devices.map((device) => <L2DeviceRow key={device.id} device={device} />)}
+          </div>
+          <ARPIPsCard devices={devices} copied={copied} setCopied={setCopied} />
         </div>
       )}
+    </div>
+  )
+}
+
+function ARPIPsCard({ devices, copied, setCopied }) {
+  const ips = Array.from(new Set(
+    (devices ?? []).flatMap((d) => Array.isArray(d.ip_addresses) ? d.ip_addresses : []).filter(Boolean)
+  ))
+  const csv = ips.join(',')
+
+  const onCopy = async () => {
+    if (!csv) return
+    try {
+      await navigator.clipboard.writeText(csv)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1200)
+    } catch {
+      // ignore
+    }
+  }
+
+  return (
+    <div className="card" style={{ padding: 12, position: 'sticky', top: 84 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <strong>ARP IPs for Nmap</strong>
+        <Badge>{ips.length}</Badge>
+      </div>
+      <p className="text-muted" style={{ marginBottom: 8 }}>Comma-separated list for quick paste into Nmap scanner.</p>
+      <textarea
+        readOnly
+        value={csv}
+        rows={8}
+        style={{ width: '100%', resize: 'vertical' }}
+        placeholder="No IPs yet"
+      />
+      <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
+        <Button variant="ghost" size="sm" icon={copied ? <Check size={13} /> : <Copy size={13} />} onClick={onCopy} disabled={!csv}>
+          {copied ? 'Copied' : 'Copy'}
+        </Button>
+      </div>
     </div>
   )
 }

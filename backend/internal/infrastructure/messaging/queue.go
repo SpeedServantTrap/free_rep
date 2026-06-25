@@ -181,11 +181,16 @@ func (p *RPCScannerPublisher) publishRPC(queueName string, task interface{}) (*m
 		return nil, err
 	}
 
+	timeout := 5 * time.Minute
+	if queueName == "nmap_service" {
+		timeout = 30 * time.Minute
+	}
+
 	select {
 	case response := <-replyChan:
 		log.Printf("Received response for %s: %+v", correlationID, response)
 		return response, nil
-	case <-time.After(5 * time.Minute):
+	case <-time.After(timeout):
 		return nil, fmt.Errorf("RPC timeout for queue %s", queueName)
 	}
 }
@@ -206,17 +211,20 @@ func (p *RPCScannerPublisher) startReplyConsumer() error {
 
 	go func() {
 		for msg := range msgs {
+			response, err := p.parseResponse(msg.Body)
+			if err != nil {
+				log.Printf("Failed to parse response: %v", err)
+				continue
+			}
+
 			p.mu.Lock()
 			replyChan, exists := p.replies[msg.CorrelationId]
 			p.mu.Unlock()
 
 			if exists {
-				response, err := p.parseResponse(msg.Body)
-				if err != nil {
-					log.Printf("Failed to parse response: %v", err)
-					continue
-				}
 				replyChan <- response
+			} else {
+				log.Printf("Received late RPC response without active waiter: correlation_id=%s task_id=%s", msg.CorrelationId, response.TaskID)
 			}
 		}
 	}()
@@ -229,6 +237,23 @@ func (p *RPCScannerPublisher) SetResponseCallback(callback func(*models.Response
 }
 
 func (p *RPCScannerPublisher) parseResponse(body []byte) (*models.Response, error) {
+	// Parse comprehensive Nmap first because it also uses the generic `results` field,
+	// which can otherwise be mistakenly decoded as ICMPResponse.Results.
+	var nmapComprehensiveResp models.NmapComprehensiveResponse
+	if err := json.Unmarshal(body, &nmapComprehensiveResp); err == nil && nmapComprehensiveResp.TaskID != "" && (len(nmapComprehensiveResp.Results) > 0 || nmapComprehensiveResp.Status == "failed") {
+		log.Printf("Received Nmap comprehensive response for task %s", nmapComprehensiveResp.TaskID)
+		response := &models.Response{
+			TaskID: nmapComprehensiveResp.TaskID,
+			Result: nmapComprehensiveResp,
+		}
+
+		if p.onResponse != nil {
+			p.onResponse(response)
+		}
+
+		return response, nil
+	}
+
 	var icmpResp models.ICMPResponse
 	if err := json.Unmarshal(body, &icmpResp); err == nil && icmpResp.TaskID != "" {
 		// Handle control command responses (started/stopped/failed)
@@ -249,6 +274,15 @@ func (p *RPCScannerPublisher) parseResponse(body []byte) (*models.Response, erro
 
 		// Handle regular scan responses
 		if len(icmpResp.Results) > 0 {
+			// Guard against false positives where non-ICMP payloads also contain `results`.
+			hasICMPShape := false
+			for _, r := range icmpResp.Results {
+				if r.Target != "" || r.Address != "" || r.PacketsSent > 0 || r.PacketsReceived > 0 || r.Error != "" {
+					hasICMPShape = true
+					break
+				}
+			}
+			if hasICMPShape {
 			log.Printf("Received ICMP response for task %s with %d results", icmpResp.TaskID, len(icmpResp.Results))
 			response := &models.Response{
 				TaskID: icmpResp.TaskID,
@@ -260,6 +294,7 @@ func (p *RPCScannerPublisher) parseResponse(body []byte) (*models.Response, erro
 			}
 
 			return response, nil
+			}
 		}
 	}
 
@@ -373,7 +408,11 @@ func (p *RPCScannerPublisher) parseResponse(body []byte) (*models.Response, erro
 		return &response, nil
 	}
 
-	log.Printf("Unable to parse response as any known type")
+	bodyPreview := string(body)
+	if len(bodyPreview) > 800 {
+		bodyPreview = bodyPreview[:800] + "..."
+	}
+	log.Printf("Unable to parse response as any known type; payload=%s", bodyPreview)
 	return nil, fmt.Errorf("unable to parse response as any known type")
 }
 

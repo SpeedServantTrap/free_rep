@@ -31,6 +31,8 @@ func (ps *PublisherService) PublishNmapRequest(req interface{}) *models.Response
 			taskID = r.TaskID
 		case models.NmapHostDiscoveryRequest:
 			taskID = r.TaskID
+		case models.NmapComprehensiveRequest:
+			taskID = r.TaskID
 		case models.NmapRequest:
 			taskID = "unknown"
 		}

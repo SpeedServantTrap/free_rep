@@ -108,14 +108,63 @@ func (s *Service) handle(ctx context.Context, d queue.Delivery) {
 }
 
 func (s *Service) readTCP(ctx context.Context, host, port string) (raw []byte, decoded string, err error) {
+	var lastErr error
+	for attempt := 0; attempt < 2; attempt++ {
+		raw, decoded, err = s.readTCPOnce(ctx, host, port)
+		if err == nil && len(raw) > 0 {
+			return raw, decoded, nil
+		}
+		if err != nil {
+			lastErr = err
+		}
+		if attempt == 0 {
+			time.Sleep(300 * time.Millisecond)
+		}
+	}
+
+	if len(raw) > 0 {
+		return raw, decoded, nil
+	}
+	if lastErr != nil {
+		return nil, "", lastErr
+	}
+	return nil, "", fmt.Errorf("empty banner")
+}
+
+func (s *Service) readTCPOnce(ctx context.Context, host, port string) (raw []byte, decoded string, err error) {
 	addr := net.JoinHostPort(host, port)
 	conn, err := (&net.Dialer{Timeout: s.cfg.ConnTimeout}).DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return nil, "", err
 	}
 	defer conn.Close()
-	_ = conn.SetDeadline(time.Now().Add(s.cfg.ReadTimeout))
 
+	// Stage 1: passive greeting read (some services send banner immediately).
+	buf := make([]byte, 0, 8192)
+	_ = conn.SetDeadline(time.Now().Add(1500 * time.Millisecond))
+	buf = append(buf, readAll(conn)...)
+
+	// Stage 2: if nothing received, send protocol-specific probe and read again.
+	if len(buf) == 0 {
+		probe := protocolProbe(port, host)
+		if len(probe) == 0 {
+			probe = []byte("\r\n")
+		}
+		if len(probe) > 0 {
+			_, _ = conn.Write(probe)
+		}
+		_ = conn.SetDeadline(time.Now().Add(s.cfg.ReadTimeout))
+		buf = append(buf, readAll(conn)...)
+	}
+
+	banner := humanString(buf)
+	if banner == "" && len(buf) > 0 {
+		banner = bytesToHexLine(buf)
+	}
+	return buf, banner, nil
+}
+
+func readAll(conn net.Conn) []byte {
 	buf := make([]byte, 0, 8192)
 	tmp := make([]byte, 4096)
 	for {
@@ -127,12 +176,15 @@ func (s *Service) readTCP(ctx context.Context, host, port string) (raw []byte, d
 			break
 		}
 	}
-	return buf, humanString(buf), nil
+	return buf
 }
 
 func bytesToHexLine(b []byte) string {
 	if len(b) == 0 {
 		return ""
+	}
+	if len(b) > 256 {
+		b = b[:256]
 	}
 	var sb strings.Builder
 	for i, v := range b {
@@ -174,4 +226,21 @@ func sanitizeObjectPart(v string) string {
 		return "unknown"
 	}
 	return v
+}
+
+func protocolProbe(port, host string) []byte {
+	switch port {
+	case "22":
+		// Some SSH daemons send identification after client speaks first.
+		return []byte("SSH-2.0-scanner\r\n")
+	case "80", "8080", "8000", "8008", "8013", "9000", "9001":
+		return []byte(fmt.Sprintf("HEAD / HTTP/1.0\r\nHost: %s\r\n\r\n", host))
+	case "5432":
+		// PostgreSQL SSLRequest packet (8 bytes) often triggers an immediate single-byte reply: 'S' or 'N'.
+		return []byte{0x00, 0x00, 0x00, 0x08, 0x04, 0xD2, 0x16, 0x2F}
+	case "25", "587", "110", "143":
+		return []byte("\r\n")
+	default:
+		return nil
+	}
 }

@@ -68,8 +68,8 @@ func TCPScan(ctx context.Context, target string, ports string) (*nmap.Run, error
 		nmap.WithPorts(ports),
 		nmap.WithConnectScan(),
 		nmap.WithSkipHostDiscovery(),
-		nmap.WithTimingTemplate(3),
-		nmap.WithMaxRetries(1),
+		nmap.WithTimingTemplate(4),
+		nmap.WithMaxRetries(0),
 		nmap.WithOpenOnly(), // Only report open ports
 	)
 
