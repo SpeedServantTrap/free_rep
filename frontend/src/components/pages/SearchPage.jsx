@@ -285,63 +285,76 @@ function L2DeviceCard({ device, onFillQuery }) {
               </div>
             </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
-            <Badge dot={false} style={{ background: 'rgba(34, 197, 94, 0.3)', color: '#86efac', fontWeight: 700, fontSize: 14, padding: '6px 12px' }}>
-              Active
-            </Badge>
-            {hasIpAddresses && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
-                {visibleIpAddresses.map((ipEntry, i) => {
-                  const ip = getIPString(ipEntry)
-                  const firstSeen = getIPFirstSeen(ipEntry)
-                  const lastSeen = getIPLastSeen(ipEntry)
-                  return (
-                    <div key={i} style={{ display: 'flex', flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-                      <button
-                        type="button"
-                        className="search-inline-link"
-                        onClick={() => {
-                          onFillQuery(`ip: ${ip}`)
-                          setTimeout(() => {
-                            const searchInput = document.querySelector('.search-input')
-                            if (searchInput) {
-                              const searchButton = searchInput.nextElementSibling
-                              if (searchButton) {
-                                searchButton.click()
-                              }
-                            }
-                          }, 100)
-                        }}
-                      >
-                        <Badge dot={false} style={{ background: 'rgba(168, 85, 247, 0.4)', color: '#ddd6fe', fontFamily: 'monospace', fontWeight: 700, fontSize: 15, padding: '8px 12px' }}>
-                          {ip}
-                        </Badge>
-                      </button>
-                      {hasPerIPTimestamps && firstSeen && lastSeen ? (
-                        <Badge dot={false} style={{ background: 'rgba(59, 130, 246, 0.3)', color: '#bfdbfe', fontFamily: 'monospace', fontWeight: 700, fontSize: 13, padding: '6px 10px' }}>
-                          First: {new Date(firstSeen).toLocaleString()} → Last: {new Date(lastSeen).toLocaleString()}
-                        </Badge>
-                      ) : null}
-                    </div>
-                  )
-                })}
-                {hasMoreIpAddresses && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setVisibleIpCount((count) => count + 15)}
-                    style={{ fontSize: 11, padding: '4px 8px' }}
-                  >
-                    +{Math.min(15, device.ip_addresses.length - visibleIpCount)}
-                  </Button>
-                )}
-              </div>
-            )}
-          </div>
+          <Badge dot={false} style={{ background: 'rgba(34, 197, 94, 0.3)', color: '#86efac', fontWeight: 700, fontSize: 14, padding: '6px 12px' }}>
+            Active
+          </Badge>
         </div>
+      </Card>
 
-        {/* Main Information Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 20 }}>
+      {/* IP Address Sections */}
+      {hasIpAddresses && (
+        <>
+          {visibleIpAddresses.map((ipEntry, i) => {
+            const ip = getIPString(ipEntry)
+            const firstSeen = getIPFirstSeen(ipEntry)
+            const lastSeen = getIPLastSeen(ipEntry)
+            return (
+              <Card key={i} style={{
+                background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+                border: '1px solid rgba(168, 85, 247, 0.3)',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: hasPerIPTimestamps && firstSeen && lastSeen ? 16 : 0 }}>
+                  <button
+                    type="button"
+                    className="search-inline-link"
+                    onClick={() => {
+                      onFillQuery(`ip: ${ip}`)
+                      setTimeout(() => {
+                        const searchInput = document.querySelector('.search-input')
+                        if (searchInput) {
+                          const searchButton = searchInput.nextElementSibling
+                          if (searchButton) {
+                            searchButton.click()
+                          }
+                        }
+                      }, 100)
+                    }}
+                  >
+                    <Badge dot={false} style={{ background: 'rgba(168, 85, 247, 0.4)', color: '#ddd6fe', fontFamily: 'monospace', fontWeight: 700, fontSize: 15, padding: '8px 12px' }}>
+                      {ip}
+                    </Badge>
+                  </button>
+                </div>
+                {hasPerIPTimestamps && firstSeen && lastSeen ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+                    <DeviceInfoRow icon={Clock} label="First Seen" value={new Date(firstSeen).toLocaleString()} />
+                    <DeviceInfoRow icon={Activity} label="Last Seen" value={new Date(lastSeen).toLocaleString()} />
+                  </div>
+                ) : null}
+              </Card>
+            )
+          })}
+          {hasMoreIpAddresses && (
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setVisibleIpCount((count) => count + 15)}
+                style={{ fontSize: 11, padding: '4px 8px' }}
+              >
+                +{Math.min(15, device.ip_addresses.length - visibleIpCount)}
+              </Button>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Vendor Section */}
+      <Card style={{
+        background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+        border: '1px solid rgba(34, 197, 94, 0.3)',
+      }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
           <DeviceInfoRow icon={Globe} label="Vendor" value={device.vendor || 'Unknown'} />
         </div>
       </Card>
