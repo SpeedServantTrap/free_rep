@@ -287,7 +287,7 @@ function L2DeviceCard({ device, onFillQuery }) {
                 className="search-inline-link"
                 onClick={() => onFillQuery(`ip: ${ip}`)}
               >
-                <Badge style={{
+                <Badge dot={false} style={{
                   background: 'rgba(59, 130, 246, 0.3)',
                   color: '#bfdbfe',
                   border: '1px solid rgba(59, 130, 246, 0.5)',
@@ -359,7 +359,7 @@ function L2DeviceCard({ device, onFillQuery }) {
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {device.scanner_types?.map((scanner, i) => (
-              <Badge key={i} style={{
+              <Badge key={i} dot={false} style={{
                 background: 'rgba(239, 68, 68, 0.3)',
                 color: '#fecaca',
                 border: '1px solid rgba(239, 68, 68, 0.5)',
@@ -457,7 +457,7 @@ function L3DeviceCard({ device, onFillQuery }) {
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {device.tcp_open_ports?.map((port, i) => (
-              <Badge key={`tcp-${i}`} style={{
+              <Badge key={`tcp-${i}`} dot={false} style={{
                 background: 'rgba(59, 130, 246, 0.4)',
                 color: '#dbeafe',
                 border: '1px solid rgba(59, 130, 246, 0.6)',
@@ -468,7 +468,7 @@ function L3DeviceCard({ device, onFillQuery }) {
               </Badge>
             ))}
             {device.udp_open_ports?.map((port, i) => (
-              <Badge key={`udp-${i}`} style={{
+              <Badge key={`udp-${i}`} dot={false} style={{
                 background: 'rgba(168, 85, 247, 0.4)',
                 color: '#e9d5ff',
                 border: '1px solid rgba(168, 85, 247, 0.6)',
@@ -618,7 +618,7 @@ function L3DeviceCard({ device, onFillQuery }) {
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {device.scanner_types?.map((scanner, i) => (
-              <Badge key={i} style={{
+              <Badge key={i} dot={false} style={{
                 background: 'rgba(239, 68, 68, 0.4)',
                 color: '#fee2e2',
                 border: '1px solid rgba(239, 68, 68, 0.6)',
