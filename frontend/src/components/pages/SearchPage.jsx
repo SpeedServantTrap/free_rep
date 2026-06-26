@@ -43,12 +43,6 @@ export default function SearchPage() {
             setHasSearched={setHasSearched}
             setSelectedDeviceId={setSelectedDeviceId}
           />
-
-          {!hasSearched && (
-            <div className="search-helper">
-              Try <code>mac: xx:xx:xx:xx:xx:xx</code>, <code>ip: x.x.x.x</code>, or <code>x.x.x.x/yy</code>
-            </div>
-          )}
         </div>
       </div>
 
@@ -121,9 +115,6 @@ function NewDeviceSearch({ query, setQuery, setResults, loading, setLoading, set
         >
           <Search size={16} />
         </Button>
-      </div>
-      <div className="search-card-hint">
-        Format: <code>mac: xx:xx:xx:xx:xx:xx</code>, <code>ip: x.x.x.x</code>, <code>ip: x.x.x.x/yy</code>, or <code>x.x.x.x/yy</code>
       </div>
     </Card>
   )
@@ -586,7 +577,7 @@ function L3DeviceCard({ device, onFillQuery }) {
           {hasPorts && (
             <div>
               <div style={{ fontSize: 12, color: '#fecaca', marginBottom: 6, fontWeight: 600 }}>Open Ports</div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
                 {device.tcp_open_ports?.map((port, i) => (
                   <Badge key={`tcp-${i}`} dot={false} style={{
                     background: 'rgba(59, 130, 246, 0.4)',
