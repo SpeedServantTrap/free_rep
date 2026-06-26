@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"time"
 )
 
 type SearchRepository interface {
@@ -380,11 +381,18 @@ func (hs *HistoryService) ProcessARPToL2Devices(result models.ARPResponse) {
 			continue
 		}
 
+		now := time.Now()
 		l2Device := &models.L2DeviceNew{
 			ID:           device.MAC,
 			Vendor:       device.Vendor,
 			ScannerTypes: []string{"arp"},
-			IPAddresses:  []string{device.IP},
+			IPAddresses: []models.IPAddressInfo{
+				{
+					IP:        device.IP,
+					FirstSeen: now,
+					LastSeen:  now,
+				},
+			},
 		}
 
 		if err := hs.repo.SaveOrUpdateL2Device(l2Device); err != nil {

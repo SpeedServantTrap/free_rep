@@ -223,6 +223,8 @@ function L2DeviceCard({ device, onFillQuery }) {
 
   // Use 'id' field (MAC address) or fallback to 'mac' or '_id'
   const displayId = device.id || device.mac || device._id
+  
+  // Handle both old format (array of strings) and new format (array of objects with ip, first_seen, last_seen)
   const visibleIpAddresses = device.ip_addresses?.slice(0, visibleIpCount) ?? []
   const hasMoreIpAddresses = (device.ip_addresses?.length ?? 0) > visibleIpCount
   const visibleScanTimes = showAllScanTimes ? (device.scan_times ?? []) : (device.scan_times?.slice(0, 10) ?? [])
@@ -230,6 +232,29 @@ function L2DeviceCard({ device, onFillQuery }) {
 
   // Check if device was scanned by ARP
   const hasArpScanner = device.scanner_types?.includes('arp')
+
+  // Helper to get IP string from either format
+  const getIPString = (ipEntry) => {
+    if (typeof ipEntry === 'string') return ipEntry
+    return ipEntry.ip || ipEntry.IP || ''
+  }
+
+  // Helper to get first_seen from IP entry
+  const getIPFirstSeen = (ipEntry) => {
+    if (typeof ipEntry === 'string') return null
+    return ipEntry.first_seen || ipEntry.FirstSeen || null
+  }
+
+  // Helper to get last_seen from IP entry
+  const getIPLastSeen = (ipEntry) => {
+    if (typeof ipEntry === 'string') return null
+    return ipEntry.last_seen || ipEntry.LastSeen || null
+  }
+
+  // Check if we have new format with per-IP timestamps
+  const hasPerIPTimestamps = hasIpAddresses && visibleIpAddresses.some(ip => 
+    typeof ip !== 'string' && (ip.first_seen || ip.FirstSeen)
+  )
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -265,30 +290,42 @@ function L2DeviceCard({ device, onFillQuery }) {
               Active
             </Badge>
             {hasIpAddresses && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
-                {visibleIpAddresses.map((ip, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    className="search-inline-link"
-                    onClick={() => {
-                      onFillQuery(`ip: ${ip}`)
-                      setTimeout(() => {
-                        const searchInput = document.querySelector('.search-input')
-                        if (searchInput) {
-                          const searchButton = searchInput.nextElementSibling
-                          if (searchButton) {
-                            searchButton.click()
-                          }
-                        }
-                      }, 100)
-                    }}
-                  >
-                    <Badge dot={false} style={{ background: 'rgba(168, 85, 247, 0.4)', color: '#ddd6fe', fontFamily: 'monospace', fontWeight: 700, fontSize: 15, padding: '8px 12px' }}>
-                      {ip}
-                    </Badge>
-                  </button>
-                ))}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+                {visibleIpAddresses.map((ipEntry, i) => {
+                  const ip = getIPString(ipEntry)
+                  const firstSeen = getIPFirstSeen(ipEntry)
+                  const lastSeen = getIPLastSeen(ipEntry)
+                  
+                  return (
+                    <div key={i} style={{ display: 'flex', flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                      {hasPerIPTimestamps && firstSeen && lastSeen ? (
+                        <Badge dot={false} style={{ background: 'rgba(59, 130, 246, 0.3)', color: '#bfdbfe', fontFamily: 'monospace', fontWeight: 700, fontSize: 13, padding: '6px 10px' }}>
+                          First: {new Date(firstSeen).toLocaleString()} → Last: {new Date(lastSeen).toLocaleString()}
+                        </Badge>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="search-inline-link"
+                        onClick={() => {
+                          onFillQuery(`ip: ${ip}`)
+                          setTimeout(() => {
+                            const searchInput = document.querySelector('.search-input')
+                            if (searchInput) {
+                              const searchButton = searchInput.nextElementSibling
+                              if (searchButton) {
+                                searchButton.click()
+                              }
+                            }
+                          }, 100)
+                        }}
+                      >
+                        <Badge dot={false} style={{ background: 'rgba(168, 85, 247, 0.4)', color: '#ddd6fe', fontFamily: 'monospace', fontWeight: 700, fontSize: 15, padding: '8px 12px' }}>
+                          {ip}
+                        </Badge>
+                      </button>
+                    </div>
+                  )
+                })}
                 {hasMoreIpAddresses && (
                   <Button
                     variant="secondary"
@@ -307,8 +344,6 @@ function L2DeviceCard({ device, onFillQuery }) {
         {/* Main Information Grid */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 20 }}>
           <DeviceInfoRow icon={Globe} label="Vendor" value={device.vendor || 'Unknown'} />
-          <DeviceInfoRow icon={Clock} label="First Seen" value={device.first_seen ? new Date(device.first_seen).toLocaleString() : 'N/A'} />
-          <DeviceInfoRow icon={Activity} label="Last Seen" value={device.last_seen ? new Date(device.last_seen).toLocaleString() : 'N/A'} />
         </div>
       </Card>
 
@@ -323,36 +358,39 @@ function L2DeviceCard({ device, onFillQuery }) {
             <div>
               <div style={{ fontSize: 12, color: '#bbf7d0', marginBottom: 6, fontWeight: 600 }}>IP Addresses</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {visibleIpAddresses.map((ip, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    className="search-inline-link"
-                    onClick={() => {
-                      onFillQuery(`ip: ${ip}`)
-                      setTimeout(() => {
-                        const searchInput = document.querySelector('.search-input')
-                        if (searchInput) {
-                          const searchButton = searchInput.nextElementSibling
-                          if (searchButton) {
-                            searchButton.click()
+                {visibleIpAddresses.map((ipEntry, i) => {
+                  const ip = getIPString(ipEntry)
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      className="search-inline-link"
+                      onClick={() => {
+                        onFillQuery(`ip: ${ip}`)
+                        setTimeout(() => {
+                          const searchInput = document.querySelector('.search-input')
+                          if (searchInput) {
+                            const searchButton = searchInput.nextElementSibling
+                            if (searchButton) {
+                              searchButton.click()
+                            }
                           }
-                        }
-                      }, 100)
-                    }}
-                  >
-                    <Badge dot={false} style={{
-                      background: 'rgba(59, 130, 246, 0.3)',
-                      color: '#bfdbfe',
-                      border: '1px solid rgba(59, 130, 246, 0.5)',
-                      fontFamily: 'monospace',
-                      fontWeight: 700,
-                      fontSize: 13
-                    }}>
-                      {ip}
-                    </Badge>
-                  </button>
-                ))}
+                        }, 100)
+                      }}
+                    >
+                      <Badge dot={false} style={{
+                        background: 'rgba(59, 130, 246, 0.3)',
+                        color: '#bfdbfe',
+                        border: '1px solid rgba(59, 130, 246, 0.5)',
+                        fontFamily: 'monospace',
+                        fontWeight: 700,
+                        fontSize: 13
+                      }}>
+                        {ip}
+                      </Badge>
+                    </button>
+                  )
+                })}
               </div>
               {hasMoreIpAddresses && (
                 <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center' }}>

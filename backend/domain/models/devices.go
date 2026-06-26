@@ -19,16 +19,23 @@ type L2Device struct {
 	LastSeen    time.Time          `bson:"last_seen"     json:"last_seen"`
 }
 
+// IPAddressInfo contains information about a specific IP address associated with a MAC
+type IPAddressInfo struct {
+	IP        string    `bson:"ip" json:"ip"`                   // IP address
+	FirstSeen time.Time `bson:"first_seen" json:"first_seen"` // First time this IP was seen with this MAC
+	LastSeen  time.Time `bson:"last_seen" json:"last_seen"`   // Last time this IP was seen with this MAC
+}
+
 // L2DeviceNew represents a unique device at the Data-Link (MAC) layer with new structure.
 // Key: MAC address (used as _id).
 // Information accumulates from different scans (ARP, NMAP, etc.).
 type L2DeviceNew struct {
-	ID          string    `bson:"_id" json:"id"` // MAC address as ID
-	Vendor      string    `bson:"vendor" json:"vendor"`                   // Device vendor from MAC
-	ScannerTypes []string `bson:"scanner_types" json:"scanner_types"`    // Comma-separated scanner types (e.g., "arp")
-	IPAddresses []string  `bson:"ip_addresses" json:"ip_addresses"`      // Comma-separated IP addresses
-	FirstSeen   time.Time `bson:"first_seen" json:"first_seen"`
-	LastSeen    time.Time `bson:"last_seen" json:"last_seen"`
+	ID          string         `bson:"_id" json:"id"`             // MAC address as ID
+	Vendor      string         `bson:"vendor" json:"vendor"`      // Device vendor from MAC
+	ScannerTypes []string      `bson:"scanner_types" json:"scanner_types"` // Scanner types (e.g., "arp")
+	IPAddresses []IPAddressInfo `bson:"ip_addresses" json:"ip_addresses"` // IP addresses with their own timestamps
+	FirstSeen   time.Time      `bson:"first_seen" json:"first_seen"` // Overall first seen (across all IPs)
+	LastSeen    time.Time      `bson:"last_seen" json:"last_seen"`   // Overall last seen (across all IPs)
 }
 
 // L3Device represents a unique device at the Network (IP) layer.

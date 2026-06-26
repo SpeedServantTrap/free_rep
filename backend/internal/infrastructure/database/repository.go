@@ -643,11 +643,59 @@ func (r *Repository) SaveOrUpdateL2Device(device *models.L2DeviceNew) error {
 			update["$set"].(bson.M)["scanner_types"] = uniqueScannerTypes
 		}
 
-		// Append new IP addresses if not already present (removing duplicates)
+		// Update IP addresses with their timestamps
 		if len(device.IPAddresses) > 0 {
-			uniqueIPs := append(existing.IPAddresses, device.IPAddresses...)
-			uniqueIPs = removeDuplicates(uniqueIPs)
-			update["$set"].(bson.M)["ip_addresses"] = uniqueIPs
+			// Create a map of existing IPs for quick lookup
+			existingIPMap := make(map[string]models.IPAddressInfo)
+			for _, ipInfo := range existing.IPAddresses {
+				existingIPMap[ipInfo.IP] = ipInfo
+			}
+
+			// Merge new IP addresses
+			mergedIPs := make([]models.IPAddressInfo, 0)
+			// First, add all existing IPs
+			mergedIPs = append(mergedIPs, existing.IPAddresses...)
+			
+			// Then add or update new IPs
+			for _, newIPInfo := range device.IPAddresses {
+				if existingIPInfo, exists := existingIPMap[newIPInfo.IP]; exists {
+					// IP exists, update last_seen if newer
+					if newIPInfo.LastSeen.After(existingIPInfo.LastSeen) {
+						existingIPInfo.LastSeen = newIPInfo.LastSeen
+					}
+					// Update first_seen if older
+					if newIPInfo.FirstSeen.Before(existingIPInfo.FirstSeen) {
+						existingIPInfo.FirstSeen = newIPInfo.FirstSeen
+					}
+					// Update in merged list
+					for i, ip := range mergedIPs {
+						if ip.IP == newIPInfo.IP {
+							mergedIPs[i] = existingIPInfo
+							break
+						}
+					}
+				} else {
+					// New IP, add it
+					mergedIPs = append(mergedIPs, newIPInfo)
+				}
+			}
+			update["$set"].(bson.M)["ip_addresses"] = mergedIPs
+
+			// Update overall first_seen and last_seen based on all IPs
+			if len(mergedIPs) > 0 {
+				overallFirstSeen := mergedIPs[0].FirstSeen
+				overallLastSeen := mergedIPs[0].LastSeen
+				for _, ipInfo := range mergedIPs {
+					if ipInfo.FirstSeen.Before(overallFirstSeen) {
+						overallFirstSeen = ipInfo.FirstSeen
+					}
+					if ipInfo.LastSeen.After(overallLastSeen) {
+						overallLastSeen = ipInfo.LastSeen
+					}
+				}
+				update["$set"].(bson.M)["first_seen"] = overallFirstSeen
+				update["$set"].(bson.M)["last_seen"] = overallLastSeen
+			}
 		}
 
 		_, err = r.db.L2DevicesCollection().UpdateOne(ctx, bson.M{"_id": device.ID}, update)
@@ -656,7 +704,24 @@ func (r *Repository) SaveOrUpdateL2Device(device *models.L2DeviceNew) error {
 		}
 	} else {
 		// Device doesn't exist, insert new one
-		device.FirstSeen = now
+		// Set overall first_seen and last_seen based on IP addresses
+		if len(device.IPAddresses) > 0 {
+			overallFirstSeen := device.IPAddresses[0].FirstSeen
+			overallLastSeen := device.IPAddresses[0].LastSeen
+			for _, ipInfo := range device.IPAddresses {
+				if ipInfo.FirstSeen.Before(overallFirstSeen) {
+					overallFirstSeen = ipInfo.FirstSeen
+				}
+				if ipInfo.LastSeen.After(overallLastSeen) {
+					overallLastSeen = ipInfo.LastSeen
+				}
+			}
+			device.FirstSeen = overallFirstSeen
+			device.LastSeen = overallLastSeen
+		} else {
+			device.FirstSeen = now
+			device.LastSeen = now
+		}
 		_, err = r.db.L2DevicesCollection().InsertOne(ctx, device)
 		if err != nil {
 			return err

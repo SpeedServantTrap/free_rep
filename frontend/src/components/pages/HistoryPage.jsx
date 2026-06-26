@@ -115,7 +115,14 @@ function ARPHistory() {
 
 function ARPIPsCard({ devices, copied, setCopied }) {
   const ips = Array.from(new Set(
-    (devices ?? []).flatMap((d) => Array.isArray(d.ip_addresses) ? d.ip_addresses : []).filter(Boolean)
+    (devices ?? []).flatMap((d) => {
+      if (!Array.isArray(d.ip_addresses)) return []
+      return d.ip_addresses.map((ipEntry) => {
+        // Handle both string format and object format
+        if (typeof ipEntry === 'string') return ipEntry
+        return ipEntry.ip || ipEntry.IP || ''
+      }).filter(Boolean)
+    })
   ))
   const csv = ips.join(',')
 
