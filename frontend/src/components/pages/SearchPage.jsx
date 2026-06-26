@@ -118,7 +118,6 @@ function NewDeviceSearch({ query, setQuery, setResults, loading, setLoading, set
           loading={loading}
           onClick={handleUniversalSearch}
           disabled={!query.trim()}
-          className="search-button"
         >
           <Search size={16} />
         </Button>
@@ -219,7 +218,6 @@ function DeviceSearchResult({ data, selectedDeviceId, setSelectedDeviceId, onFil
 function L2DeviceCard({ device, onFillQuery }) {
   const hasIpAddresses = device.ip_addresses?.length > 0
   const hasScanTimes = device.scan_times?.length > 0
-  const hasScanners = device.scanner_types?.length > 0
   const [visibleIpCount, setVisibleIpCount] = useState(15)
   const [showAllScanTimes, setShowAllScanTimes] = useState(false)
 
@@ -229,6 +227,9 @@ function L2DeviceCard({ device, onFillQuery }) {
   const hasMoreIpAddresses = (device.ip_addresses?.length ?? 0) > visibleIpCount
   const visibleScanTimes = showAllScanTimes ? (device.scan_times ?? []) : (device.scan_times?.slice(0, 10) ?? [])
   const hiddenScanTimesCount = Math.max((device.scan_times?.length ?? 0) - visibleScanTimes.length, 0)
+
+  // Check if device was scanned by ARP
+  const hasArpScanner = device.scanner_types?.includes('arp')
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -259,9 +260,48 @@ function L2DeviceCard({ device, onFillQuery }) {
               </div>
             </div>
           </div>
-          <Badge dot={false} style={{ background: 'rgba(34, 197, 94, 0.3)', color: '#86efac', fontWeight: 700, fontSize: 14, padding: '6px 12px' }}>
-            Active
-          </Badge>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
+            <Badge dot={false} style={{ background: 'rgba(34, 197, 94, 0.3)', color: '#86efac', fontWeight: 700, fontSize: 14, padding: '6px 12px' }}>
+              Active
+            </Badge>
+            {hasIpAddresses && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
+                {visibleIpAddresses.map((ip, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    className="search-inline-link"
+                    onClick={() => {
+                      onFillQuery(`ip: ${ip}`)
+                      setTimeout(() => {
+                        const searchInput = document.querySelector('.search-input')
+                        if (searchInput) {
+                          const searchButton = searchInput.nextElementSibling
+                          if (searchButton) {
+                            searchButton.click()
+                          }
+                        }
+                      }, 100)
+                    }}
+                  >
+                    <Badge dot={false} style={{ background: 'rgba(168, 85, 247, 0.4)', color: '#ddd6fe', fontFamily: 'monospace', fontWeight: 700, fontSize: 15, padding: '8px 12px' }}>
+                      {ip}
+                    </Badge>
+                  </button>
+                ))}
+                {hasMoreIpAddresses && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setVisibleIpCount((count) => count + 15)}
+                    style={{ fontSize: 11, padding: '4px 8px' }}
+                  >
+                    +{Math.min(15, device.ip_addresses.length - visibleIpCount)}
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Main Information Grid */}
@@ -272,43 +312,59 @@ function L2DeviceCard({ device, onFillQuery }) {
         </div>
       </Card>
 
-      {/* IP Addresses Section */}
-      {hasIpAddresses && (
-        <Card style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#93c5fd', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Server size={20} />
-            IP Addresses
+      {/* ARP Scanner Section */}
+      {hasArpScanner && (
+        <Card style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#86efac', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Network size={20} />
+            ARP Scanner
           </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {visibleIpAddresses.map((ip, i) => (
-              <button
-                key={i}
-                type="button"
-                className="search-inline-link"
-                onClick={() => onFillQuery(`ip: ${ip}`)}
-              >
-                <Badge dot={false} style={{
-                  background: 'rgba(59, 130, 246, 0.3)',
-                  color: '#bfdbfe',
-                  border: '1px solid rgba(59, 130, 246, 0.5)',
-                  fontFamily: 'monospace',
-                  fontWeight: 700,
-                  fontSize: 13
-                }}>
-                  {ip}
-                </Badge>
-              </button>
-            ))}
-          </div>
-          {hasMoreIpAddresses && (
-            <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center' }}>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setVisibleIpCount((count) => count + 15)}
-              >
-                Загрузить ещё IP ({Math.min(15, device.ip_addresses.length - visibleIpCount)})
-              </Button>
+          {hasIpAddresses && (
+            <div>
+              <div style={{ fontSize: 12, color: '#bbf7d0', marginBottom: 6, fontWeight: 600 }}>IP Addresses</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {visibleIpAddresses.map((ip, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    className="search-inline-link"
+                    onClick={() => {
+                      onFillQuery(`ip: ${ip}`)
+                      setTimeout(() => {
+                        const searchInput = document.querySelector('.search-input')
+                        if (searchInput) {
+                          const searchButton = searchInput.nextElementSibling
+                          if (searchButton) {
+                            searchButton.click()
+                          }
+                        }
+                      }, 100)
+                    }}
+                  >
+                    <Badge dot={false} style={{
+                      background: 'rgba(59, 130, 246, 0.3)',
+                      color: '#bfdbfe',
+                      border: '1px solid rgba(59, 130, 246, 0.5)',
+                      fontFamily: 'monospace',
+                      fontWeight: 700,
+                      fontSize: 13
+                    }}>
+                      {ip}
+                    </Badge>
+                  </button>
+                ))}
+              </div>
+              {hasMoreIpAddresses && (
+                <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center' }}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setVisibleIpCount((count) => count + 15)}
+                  >
+                    Загрузить ещё IP ({Math.min(15, device.ip_addresses.length - visibleIpCount)})
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </Card>
@@ -350,29 +406,6 @@ function L2DeviceCard({ device, onFillQuery }) {
         </Card>
       )}
 
-      {/* Scanner Types Section */}
-      {hasScanners && (
-        <Card style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#fca5a5', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Shield size={20} />
-            Scanner Types
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {device.scanner_types?.map((scanner, i) => (
-              <Badge key={i} dot={false} style={{
-                background: 'rgba(239, 68, 68, 0.3)',
-                color: '#fecaca',
-                border: '1px solid rgba(239, 68, 68, 0.5)',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                fontSize: 12
-              }}>
-                {scanner}
-              </Badge>
-            ))}
-          </div>
-        </Card>
-      )}
     </div>
   )
 }
@@ -383,7 +416,6 @@ function L3DeviceCard({ device, onFillQuery }) {
   const bannerEntries = Object.entries(device.tcp_banners ?? {}).filter(([port, banner]) => port && banner)
   const hasBannerByPort = bannerEntries.length > 0
   const hasScanTimes = device.scan_times?.length > 0
-  const hasScanners = device.scanner_types?.length > 0
   const [showAllScanTimes, setShowAllScanTimes] = useState(false)
   const [expandedBannerPort, setExpandedBannerPort] = useState(null)
 
@@ -392,190 +424,259 @@ function L3DeviceCard({ device, onFillQuery }) {
   const visibleScanTimes = showAllScanTimes ? (device.scan_times ?? []) : (device.scan_times?.slice(0, 10) ?? [])
   const hiddenScanTimesCount = Math.max((device.scan_times?.length ?? 0) - visibleScanTimes.length, 0)
 
+  // Check which scanners were used
+  const hasArpScanner = device.scanner_types?.includes('arp')
+  const hasNmapScanner = device.scanner_types?.includes('nmap')
+  const hasTcpScanner = device.scanner_types?.includes('tcp')
+  const hasIcmpScanner = device.scanner_types?.includes('icmp')
+
   return (
-    <Card style={{
-      background: 'linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%)',
-      border: '1px solid rgba(59, 130, 246, 0.3)',
-    }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* Header Section */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{
-            width: 64,
-            height: 64,
-            borderRadius: 16,
-            background: 'rgba(59, 130, 246, 0.3)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}>
-            <Server size={32} style={{ color: '#93c5fd' }} />
-          </div>
-          <div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: '#fff', marginBottom: 6, fontFamily: 'monospace' }}>
-              {displayId}
+      <Card style={{
+        background: 'linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%)',
+        border: '1px solid rgba(59, 130, 246, 0.3)',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{
+              width: 64,
+              height: 64,
+              borderRadius: 16,
+              background: 'rgba(59, 130, 246, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <Server size={32} style={{ color: '#93c5fd' }} />
             </div>
-            <div style={{ fontSize: 16, color: '#93c5fd', fontWeight: 700 }}>
-              L3 Device
+            <div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: '#fff', marginBottom: 6, fontFamily: 'monospace' }}>
+                {displayId}
+              </div>
+              <div style={{ fontSize: 16, color: '#93c5fd', fontWeight: 700 }}>
+                L3 Device
+              </div>
             </div>
           </div>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
-          <Badge dot={false} style={{ background: 'rgba(34, 197, 94, 0.3)', color: '#86efac', fontWeight: 700, fontSize: 14, padding: '6px 12px' }}>
-            Active
-          </Badge>
-          {device.mac && device.mac !== '-' && (
-            <button
-              type="button"
-              className="search-inline-link"
-              onClick={() => onFillQuery(`mac: ${device.mac}`)}
-            >
-              <Badge dot={false} style={{ background: 'rgba(168, 85, 247, 0.4)', color: '#ddd6fe', fontFamily: 'monospace', fontWeight: 700, fontSize: 15, padding: '8px 12px' }}>
-                {device.mac}
-              </Badge>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Main Information Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
-        <DeviceInfoRow icon={Shield} label="OS" value={device.os || 'Unknown'} />
-        <DeviceInfoRow icon={Globe} label="DNS" value={device.dns || 'Unknown'} />
-        <DeviceInfoRow icon={Clock} label="First Seen" value={device.first_seen ? new Date(device.first_seen).toLocaleString() : 'N/A'} />
-        <DeviceInfoRow icon={Activity} label="Last Seen" value={device.last_seen ? new Date(device.last_seen).toLocaleString() : 'N/A'} />
-      </div>
-
-      <div style={{ height: 1, background: 'rgba(255,255,255,0.1)', marginBottom: 24 }} />
-
-      {/* Open Ports Section */}
-      {hasPorts && (
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#bfdbfe', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Server size={20} />
-            Open Ports
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {device.tcp_open_ports?.map((port, i) => (
-              <Badge key={`tcp-${i}`} dot={false} style={{
-                background: 'rgba(59, 130, 246, 0.4)',
-                color: '#dbeafe',
-                border: '1px solid rgba(59, 130, 246, 0.6)',
-                fontWeight: 700,
-                fontSize: 13
-              }}>
-                TCP:{port}
-              </Badge>
-            ))}
-            {device.udp_open_ports?.map((port, i) => (
-              <Badge key={`udp-${i}`} dot={false} style={{
-                background: 'rgba(168, 85, 247, 0.4)',
-                color: '#e9d5ff',
-                border: '1px solid rgba(168, 85, 247, 0.6)',
-                fontWeight: 700,
-                fontSize: 13
-              }}>
-                UDP:{port}
-              </Badge>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Packets Section */}
-      {hasPackets && (
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#86efac', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Activity size={20} />
-            ICMP Packets
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {device.packets_reached?.map((packets, i) => (
-              <span key={i} style={{
-                fontSize: 14,
-                padding: '8px 14px',
-                borderRadius: 6,
-                background: 'rgba(34, 197, 94, 0.3)',
-                color: '#bbf7d0',
-                border: '1px solid rgba(34, 197, 94, 0.5)',
-                fontFamily: 'monospace',
-                fontWeight: 700
-              }}>
-                {packets}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* TCP Banner Section */}
-      {hasBannerByPort && (
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#fde047', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Server size={20} />
-            TCP Banners by Port
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-            {bannerEntries.map(([port]) => (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
+            <Badge dot={false} style={{ background: 'rgba(34, 197, 94, 0.3)', color: '#86efac', fontWeight: 700, fontSize: 14, padding: '6px 12px' }}>
+              Active
+            </Badge>
+            {device.mac && device.mac !== '-' && (
               <button
-                key={port}
                 type="button"
-                onClick={() => setExpandedBannerPort((prev) => (prev === port ? null : port))}
-                style={{
-                  fontSize: 12,
-                  fontFamily: 'monospace',
-                  fontWeight: 700,
-                  padding: '6px 10px',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  border: expandedBannerPort === port
-                    ? '1px solid rgba(250, 204, 21, 0.9)'
-                    : '1px solid rgba(234, 179, 8, 0.45)',
-                  background: expandedBannerPort === port
-                    ? 'rgba(234, 179, 8, 0.4)'
-                    : 'rgba(234, 179, 8, 0.2)',
-                  color: '#fef08a'
+                className="search-inline-link"
+                onClick={() => {
+                  onFillQuery(`mac: ${device.mac}`)
+                  setTimeout(() => {
+                    const searchInput = document.querySelector('.search-input')
+                    if (searchInput) {
+                      const searchButton = searchInput.nextElementSibling
+                      if (searchButton) {
+                        searchButton.click()
+                      }
+                    }
+                  }, 100)
                 }}
               >
-                TCP:{port}
+                <Badge dot={false} style={{ background: 'rgba(168, 85, 247, 0.4)', color: '#ddd6fe', fontFamily: 'monospace', fontWeight: 700, fontSize: 15, padding: '8px 12px' }}>
+                  {device.mac}
+                </Badge>
               </button>
-            ))}
-          </div>
-          {expandedBannerPort && (
-            <div style={{
-              padding: 12,
-              background: 'rgba(234, 179, 8, 0.2)',
-              borderRadius: 6,
-              border: '1px solid rgba(234, 179, 8, 0.4)'
-            }}>
-              <div style={{ fontSize: 12, color: '#fde68a', marginBottom: 6, fontFamily: 'monospace', fontWeight: 700 }}>
-                Port {expandedBannerPort}
-              </div>
-              <pre style={{
-                fontSize: 13,
-                color: '#fef08a',
-                margin: 0,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-              }}>
-                {device.tcp_banners?.[expandedBannerPort]}
-              </pre>
-            </div>
-          )}
-          {!expandedBannerPort && (
-            <div style={{ fontSize: 12, color: '#fde68a' }}>
-              Нажмите на порт, чтобы раскрыть баннер.
-            </div>
-          )}
-          <div style={{ marginTop: 6, fontSize: 12, color: '#fde68a', opacity: 0.9 }}>
-            Порты: {bannerEntries.map(([port]) => port).join(',')}
+            )}
           </div>
         </div>
+
+        {/* Main Information Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
+          <DeviceInfoRow icon={Clock} label="First Seen" value={device.first_seen ? new Date(device.first_seen).toLocaleString() : 'N/A'} />
+          <DeviceInfoRow icon={Activity} label="Last Seen" value={device.last_seen ? new Date(device.last_seen).toLocaleString() : 'N/A'} />
+        </div>
+      </Card>
+
+      {/* ARP Scanner Section */}
+      {hasArpScanner && (
+        <Card style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#86efac', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Network size={20} />
+            ARP Scanner
+          </div>
+          {device.mac && device.mac !== '-' && (
+            <div>
+              <div style={{ fontSize: 12, color: '#bbf7d0', marginBottom: 6, fontWeight: 600 }}>MAC Address</div>
+              <button
+                type="button"
+                className="search-inline-link"
+                onClick={() => {
+                  onFillQuery(`mac: ${device.mac}`)
+                  setTimeout(() => {
+                    const searchInput = document.querySelector('.search-input')
+                    if (searchInput) {
+                      const searchButton = searchInput.nextElementSibling
+                      if (searchButton) {
+                        searchButton.click()
+                      }
+                    }
+                  }, 100)
+                }}
+              >
+                <div style={{ fontSize: 14, fontFamily: 'monospace', fontWeight: 700, color: '#f1f5f9' }}>
+                  {device.mac}
+                </div>
+              </button>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* NMAP Scanner Section */}
+      {hasNmapScanner && (
+        <Card style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#fca5a5', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Shield size={20} />
+            NMAP Scanner
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 16 }}>
+            <DeviceInfoRow icon={Shield} label="OS" value={device.os || 'Unknown'} />
+            <DeviceInfoRow icon={Globe} label="DNS" value={device.dns || 'Unknown'} />
+          </div>
+          {hasPorts && (
+            <div>
+              <div style={{ fontSize: 12, color: '#fecaca', marginBottom: 6, fontWeight: 600 }}>Open Ports</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {device.tcp_open_ports?.map((port, i) => (
+                  <Badge key={`tcp-${i}`} dot={false} style={{
+                    background: 'rgba(59, 130, 246, 0.4)',
+                    color: '#dbeafe',
+                    border: '1px solid rgba(59, 130, 246, 0.6)',
+                    fontWeight: 700,
+                    fontSize: 13
+                  }}>
+                    TCP:{port}
+                  </Badge>
+                ))}
+                {device.udp_open_ports?.map((port, i) => (
+                  <Badge key={`udp-${i}`} dot={false} style={{
+                    background: 'rgba(168, 85, 247, 0.4)',
+                    color: '#e9d5ff',
+                    border: '1px solid rgba(168, 85, 247, 0.6)',
+                    fontWeight: 700,
+                    fontSize: 13
+                  }}>
+                    UDP:{port}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* TCP Scanner Section */}
+      {hasTcpScanner && (
+        <Card style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#93c5fd', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Server size={20} />
+            TCP Scanner
+          </div>
+          {hasBannerByPort && (
+            <div>
+              <div style={{ fontSize: 12, color: '#bfdbfe', marginBottom: 6, fontWeight: 600 }}>TCP Banners by Port</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+                {bannerEntries.map(([port]) => (
+                  <button
+                    key={port}
+                    type="button"
+                    onClick={() => setExpandedBannerPort((prev) => (prev === port ? null : port))}
+                    style={{
+                      fontSize: 12,
+                      fontFamily: 'monospace',
+                      fontWeight: 700,
+                      padding: '6px 10px',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      border: expandedBannerPort === port
+                        ? '1px solid rgba(250, 204, 21, 0.9)'
+                        : '1px solid rgba(234, 179, 8, 0.45)',
+                      background: expandedBannerPort === port
+                        ? 'rgba(234, 179, 8, 0.4)'
+                        : 'rgba(234, 179, 8, 0.2)',
+                      color: '#fef08a'
+                    }}
+                  >
+                    TCP:{port}
+                  </button>
+                ))}
+              </div>
+              {expandedBannerPort && (
+                <div style={{
+                  padding: 12,
+                  background: 'rgba(234, 179, 8, 0.2)',
+                  borderRadius: 6,
+                  border: '1px solid rgba(234, 179, 8, 0.4)'
+                }}>
+                  <div style={{ fontSize: 12, color: '#fde68a', marginBottom: 6, fontFamily: 'monospace', fontWeight: 700 }}>
+                    Port {expandedBannerPort}
+                  </div>
+                  <pre style={{
+                    fontSize: 13,
+                    color: '#fef08a',
+                    margin: 0,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                  }}>
+                    {device.tcp_banners?.[expandedBannerPort]}
+                  </pre>
+                </div>
+              )}
+              {!expandedBannerPort && (
+                <div style={{ fontSize: 12, color: '#fde68a' }}>
+                  Нажмите на порт, чтобы раскрыть баннер.
+                </div>
+              )}
+              <div style={{ marginTop: 6, fontSize: 12, color: '#fde68a', opacity: 0.9 }}>
+                Порты: {bannerEntries.map(([port]) => port).join(',')}
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* ICMP Scanner Section */}
+      {hasIcmpScanner && (
+        <Card style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#86efac', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Activity size={20} />
+            ICMP Scanner
+          </div>
+          {hasPackets && (
+            <div>
+              <div style={{ fontSize: 12, color: '#bbf7d0', marginBottom: 6, fontWeight: 600 }}>ICMP Packets</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {device.packets_reached?.map((packets, i) => (
+                  <span key={i} style={{
+                    fontSize: 14,
+                    padding: '8px 14px',
+                    borderRadius: 6,
+                    background: 'rgba(34, 197, 94, 0.3)',
+                    color: '#bbf7d0',
+                    border: '1px solid rgba(34, 197, 94, 0.5)',
+                    fontFamily: 'monospace',
+                    fontWeight: 700
+                  }}>
+                    {packets}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
       )}
 
       {/* Scan Times Section */}
       {hasScanTimes && (
-        <div style={{ marginBottom: 20 }}>
+        <Card style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', border: '1px solid rgba(99, 102, 241, 0.3)' }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: '#c7d2fe', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <Clock size={20} />
             Scan Times
@@ -606,33 +707,10 @@ function L3DeviceCard({ device, onFillQuery }) {
               </Button>
             </div>
           )}
-        </div>
+        </Card>
       )}
 
-      {/* Scanner Types Section */}
-      {hasScanners && (
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#fecaca', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Shield size={20} />
-            Scanner Types
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {device.scanner_types?.map((scanner, i) => (
-              <Badge key={i} dot={false} style={{
-                background: 'rgba(239, 68, 68, 0.4)',
-                color: '#fee2e2',
-                border: '1px solid rgba(239, 68, 68, 0.6)',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                fontSize: 12
-              }}>
-                {scanner}
-              </Badge>
-            ))}
-          </div>
-        </div>
-      )}
-    </Card>
+    </div>
   )
 }
 
